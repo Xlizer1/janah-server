@@ -91,57 +91,23 @@ class ProductController {
   }
 
   /**
-   * Get products by category ID
+   * Get products by category ID or slug
    */
   static async getProductsByCategory(req, res) {
     try {
-      const { category_id } = req.params;
+      const { identifier } = req.params;
       const { page, limit, sort_by, sort_order } = req.query;
 
-      // Validate that category exists
-      const category = await CategoryModel.findById(category_id);
-      if (!category) {
-        throw new NotFoundError("Category not found");
+      // Check if identifier is numeric (ID) or string (slug)
+      const isNumeric = /^\d+$/.test(identifier);
+
+      let category;
+      if (isNumeric) {
+        category = await CategoryModel.findById(identifier);
+      } else {
+        category = await CategoryModel.findBySlug(identifier);
       }
 
-      const options = {
-        page: parseInt(page) || 1,
-        limit: parseInt(limit) || 10,
-        categoryId: parseInt(category_id),
-        isActive: true,
-        sortBy: sort_by,
-        sortOrder: sort_order,
-      };
-
-      const result = await ProductModel.getAllProducts(options);
-
-      res.json({
-        status: true,
-        message: `Products in category '${category.name}' retrieved successfully`,
-        data: {
-          ...result,
-          category: {
-            id: category.id,
-            name: category.name,
-            slug: category.slug,
-          },
-        },
-      });
-    } catch (error) {
-      throw error;
-    }
-  }
-
-  /**
-   * Get products by category slug
-   */
-  static async getProductsByCategorySlug(req, res) {
-    try {
-      const { category_slug } = req.params;
-      const { page, limit, sort_by, sort_order } = req.query;
-
-      // Find category by slug
-      const category = await CategoryModel.findBySlug(category_slug);
       if (!category) {
         throw new NotFoundError("Category not found");
       }

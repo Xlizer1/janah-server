@@ -61,25 +61,14 @@ router.get(
 router.get("/categories", asyncHandler(ProductController.getCategories));
 
 /**
- * @route GET /api/v1/products/category/:category_id
- * @desc Get products by category ID
+ * @route GET /api/v1/products/category/:identifier
+ * @desc Get products by category ID or slug (handled in controller)
  * @access Public
  */
 router.get(
-  "/category/:category_id(\\d+)",
+  "/category/:identifier",
   validateRequest(getProductsSchema),
   asyncHandler(ProductController.getProductsByCategory)
-);
-
-/**
- * @route GET /api/v1/products/category/:category_slug
- * @desc Get products by category slug
- * @access Public
- */
-router.get(
-  "/category/:category_slug",
-  validateRequest(getProductsSchema),
-  asyncHandler(ProductController.getProductsByCategorySlug)
 );
 
 /**
