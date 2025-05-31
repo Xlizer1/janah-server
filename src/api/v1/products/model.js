@@ -20,6 +20,8 @@ class ProductModel {
         maxPrice,
         search,
         isFeatured,
+        sortBy = "created_at",
+        sortOrder = "DESC",
       } = options;
 
       const offset = (page - 1) * limit;
@@ -48,8 +50,10 @@ class ProductModel {
       }
 
       if (search) {
-        whereConditions.push("(p.name LIKE ? OR p.description LIKE ?)");
-        params.push(`%${search}%`, `%${search}%`);
+        whereConditions.push(
+          "(p.name LIKE ? OR p.description LIKE ? OR p.sku LIKE ?)"
+        );
+        params.push(`%${search}%`, `%${search}%`, `%${search}%`);
       }
 
       if (isFeatured !== undefined) {
@@ -61,6 +65,23 @@ class ProductModel {
         whereConditions.length > 0
           ? `WHERE ${whereConditions.join(" AND ")}`
           : "";
+
+      // Validate and build ORDER BY clause
+      const validSortFields = [
+        "name",
+        "price",
+        "created_at",
+        "stock_quantity",
+        "id",
+      ];
+      const validSortOrders = ["ASC", "DESC"];
+
+      const safeSortBy = validSortFields.includes(sortBy)
+        ? sortBy
+        : "created_at";
+      const safeSortOrder = validSortOrders.includes(sortOrder.toUpperCase())
+        ? sortOrder.toUpperCase()
+        : "DESC";
 
       // Get total count
       const countSql = `SELECT COUNT(*) as total FROM products p ${whereClause}`;
@@ -81,7 +102,7 @@ class ProductModel {
                 FROM products p
                 LEFT JOIN categories c ON p.category_id = c.id
                 ${whereClause}
-                ORDER BY p.created_at DESC
+                ORDER BY p.${safeSortBy} ${safeSortOrder}
                 LIMIT ? OFFSET ?
             `;
 
@@ -172,7 +193,10 @@ class ProductModel {
                 LIMIT ?
             `;
       const result = await executeQuery(sql, [limit], "Get Featured Products");
-      return { products: result };
+      return {
+        products: result,
+        total: result.length,
+      };
     } catch (error) {
       throw new DatabaseError(
         `Error getting featured products: ${error.message}`,
@@ -186,7 +210,13 @@ class ProductModel {
    */
   static async searchProducts(searchTerm, options = {}) {
     try {
-      const { limit = 20, isActive = true } = options;
+      const {
+        limit = 20,
+        isActive = true,
+        sortBy = "name",
+        sortOrder = "ASC",
+        categoryId,
+      } = options;
 
       let whereConditions = [
         "(p.name LIKE ? OR p.description LIKE ? OR p.sku LIKE ?)",
@@ -198,12 +228,41 @@ class ProductModel {
         params.push(isActive);
       }
 
+      if (categoryId) {
+        whereConditions.push("p.category_id = ?");
+        params.push(categoryId);
+      }
+
       const whereClause = `WHERE ${whereConditions.join(" AND ")}`;
+
+      // Validate sort parameters
+      const validSortFields = ["name", "price", "created_at", "relevance"];
+      const validSortOrders = ["ASC", "DESC"];
+
+      let safeSortBy = validSortFields.includes(sortBy) ? sortBy : "name";
+      const safeSortOrder = validSortOrders.includes(sortOrder.toUpperCase())
+        ? sortOrder.toUpperCase()
+        : "ASC";
+
+      // Handle relevance sorting (prioritize exact matches)
+      let orderByClause;
+      if (safeSortBy === "relevance") {
+        orderByClause = `ORDER BY 
+          CASE 
+            WHEN p.name LIKE ? THEN 1
+            WHEN p.name LIKE ? THEN 2
+            WHEN p.description LIKE ? THEN 3
+            ELSE 4
+          END, p.name ASC`;
+        params.push(`${searchTerm}`, `%${searchTerm}%`, `%${searchTerm}%`);
+      } else {
+        orderByClause = `ORDER BY p.${safeSortBy} ${safeSortOrder}`;
+      }
 
       const countSql = `SELECT COUNT(*) as total FROM products p ${whereClause}`;
       const countResult = await executeQuery(
         countSql,
-        params,
+        params.slice(0, whereConditions.length === 2 ? 4 : 3),
         "Count Search Products"
       );
       const total = countResult[0].total;
@@ -216,7 +275,7 @@ class ProductModel {
                 FROM products p
                 LEFT JOIN categories c ON p.category_id = c.id
                 ${whereClause}
-                ORDER BY p.name ASC
+                ${orderByClause}
                 LIMIT ?
             `;
 

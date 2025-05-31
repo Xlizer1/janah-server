@@ -10,8 +10,25 @@ const getProductsSchema = Joi.object({
   search: Joi.string().min(1).max(100).optional(),
   is_featured: Joi.boolean().optional(),
   category_slug: Joi.string().optional(),
-  sort_by: Joi.string().optional(),
-  sort_order: Joi.string().optional(),
+  sort_by: Joi.string()
+    .valid("name", "price", "created_at", "stock_quantity")
+    .optional(),
+  sort_order: Joi.string().valid("ASC", "DESC", "asc", "desc").optional(),
+  is_active: Joi.boolean().optional(),
+});
+
+const searchProductsSchema = Joi.object({
+  q: Joi.string().min(2).max(100).required().messages({
+    "string.min": "Search term must be at least 2 characters long",
+    "string.max": "Search term cannot exceed 100 characters",
+    "any.required": "Search term is required",
+  }),
+  sort_by: Joi.string()
+    .valid("name", "price", "created_at", "relevance")
+    .optional(),
+  sort_order: Joi.string().valid("ASC", "DESC", "asc", "desc").optional(),
+  limit: Joi.number().integer().min(1).max(100).default(20),
+  category_id: Joi.number().integer().positive().optional(),
 });
 
 const createProductSchema = Joi.object({
@@ -43,8 +60,19 @@ const updateProductSchema = Joi.object({
   image_url: Joi.string().uri().max(500).allow(null).optional(),
 });
 
+const updateStockSchema = Joi.object({
+  stock_quantity: Joi.number().integer().min(0).required().messages({
+    "number.base": "Stock quantity must be a number",
+    "number.integer": "Stock quantity must be an integer",
+    "number.min": "Stock quantity cannot be negative",
+    "any.required": "Stock quantity is required",
+  }),
+});
+
 module.exports = {
   getProductsSchema,
+  searchProductsSchema,
   createProductSchema,
   updateProductSchema,
+  updateStockSchema,
 };
