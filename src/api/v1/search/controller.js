@@ -1,3 +1,8 @@
+const { ProductModel } = require("../products/model");
+const CategoryModel = require("../categories/model");
+const { executeQuery } = require("../../../helpers/db");
+const { ValidationError } = require("../../../middleware/errorHandler");
+
 class SearchController {
   /**
    * Global search across products and categories
@@ -12,7 +17,7 @@ class SearchController {
 
       const searchTerm = query.trim();
 
-      // Search products
+      // Search products using the updated model
       const productsResult = await ProductModel.searchProducts(searchTerm, {
         limit: Math.floor(limit * 0.7), // 70% of results for products
         isActive: true,
@@ -59,15 +64,15 @@ class SearchController {
 
       const searchTerm = query.trim();
 
-      // Get product name suggestions
+      // Get product name suggestions (updated query)
       const sql = `
-                SELECT DISTINCT name as suggestion, 'product' as type, slug
-                FROM products 
-                WHERE name LIKE ? AND is_active = true
+                SELECT DISTINCT p.name as suggestion, 'product' as type, p.slug
+                FROM products p
+                WHERE p.name LIKE ? AND p.is_active = true
                 UNION
-                SELECT DISTINCT name as suggestion, 'category' as type, slug
-                FROM categories 
-                WHERE name LIKE ? AND is_active = true
+                SELECT DISTINCT c.name as suggestion, 'category' as type, c.slug
+                FROM categories c
+                WHERE c.name LIKE ? AND c.is_active = true
                 ORDER BY suggestion
                 LIMIT ?
             `;
@@ -99,20 +104,18 @@ class SearchController {
       let params = [];
 
       if (category_id) {
-        categoryFilter = "WHERE category_id = ?";
+        categoryFilter = "AND p.category_id = ?";
         params = [category_id];
       }
 
-      // Get price ranges
+      // Get price ranges (updated query)
       const priceRangeSQL = `
                 SELECT 
-                    MIN(price) as min_price,
-                    MAX(price) as max_price,
-                    AVG(price) as avg_price
-                FROM products 
-                WHERE is_active = true ${
-                  category_id ? "AND category_id = ?" : ""
-                }
+                    MIN(p.price) as min_price,
+                    MAX(p.price) as max_price,
+                    AVG(p.price) as avg_price
+                FROM products p
+                WHERE p.is_active = true ${categoryFilter}
             `;
 
       const priceRanges = await executeQuery(
@@ -138,15 +141,13 @@ class SearchController {
         "Get Filter Categories"
       );
 
-      // Get feature flags
+      // Get feature flags (updated query)
       const featuresSQL = `
                 SELECT 
-                    COUNT(CASE WHEN is_featured = true THEN 1 END) as featured_count,
+                    COUNT(CASE WHEN p.is_featured = true THEN 1 END) as featured_count,
                     COUNT(*) as total_count
-                FROM products 
-                WHERE is_active = true ${
-                  category_id ? "AND category_id = ?" : ""
-                }
+                FROM products p
+                WHERE p.is_active = true ${categoryFilter}
             `;
 
       const features = await executeQuery(
@@ -169,6 +170,7 @@ class SearchController {
             { value: "price_desc", label: "Price High to Low" },
             { value: "created_at_desc", label: "Newest First" },
             { value: "created_at_asc", label: "Oldest First" },
+            { value: "featured", label: "Featured First" },
           ],
         },
       });
