@@ -5,7 +5,6 @@ const validateRequest = require("../../../middleware/validateRequest");
 const {
   authenticateToken,
   requireAdmin,
-  requireActiveUser,
   optionalAuth,
 } = require("../../../middleware/auth");
 const { asyncHandler } = require("../../../middleware/errorHandler");

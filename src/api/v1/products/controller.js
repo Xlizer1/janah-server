@@ -1,7 +1,7 @@
 const { ProductModel } = require("./model");
 const { NotFoundError } = require("../../../middleware/errorHandler");
 
-export class ProductController {
+class ProductController {
   /**
    * Get all products (for activated users)
    */
@@ -169,3 +169,7 @@ export class ProductController {
     }
   }
 }
+
+module.exports = {
+  ProductController,
+};
