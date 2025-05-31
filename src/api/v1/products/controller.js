@@ -1,4 +1,4 @@
-import { ProductModel } from "./model";
+const { ProductModel } = require("./model");
 const { NotFoundError } = require("../../../middleware/errorHandler");
 
 export class ProductController {

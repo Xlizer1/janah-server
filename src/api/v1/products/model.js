@@ -1,12 +1,11 @@
 const {
   executeQuery,
-  executeTransaction,
   buildInsertQuery,
   buildUpdateQuery,
 } = require("../../../helpers/db");
 const { DatabaseError } = require("../../../errors/customErrors");
 
-export class ProductModel {
+class ProductModel {
   /**
    * Get all products with pagination and filters
    */
@@ -194,3 +193,7 @@ export class ProductModel {
     }
   }
 }
+
+module.exports = {
+  ProductModel,
+};

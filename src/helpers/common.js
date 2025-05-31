@@ -14,7 +14,7 @@ const hash = (text) => {
             bcrypt
                 .hash(text, typeof saltRounds === "string" ? JSON.parse(saltRounds) : saltRounds)
                 .then((hashedText) => resolve(hashedText))
-                .catch((e) => console.log(e));
+                .catch((e) => reject(e));
         } catch (error) {
             reject(`An error occurred while hashing: ${error.message}`);
         }
@@ -27,7 +27,7 @@ const verifyPassword = (password, hashedPassword) => {
             const comparisonResult = await bcrypt.compare(password, hashedPassword);
             resolve(comparisonResult);
         } catch (error) {
-            reject("An error occured while verifying password: ", error);
+            reject("An error occured while verifying password: " + error.message);
         }
     });
 };
@@ -39,7 +39,7 @@ const createToken = (object) => {
             const token = await jwt.sign({ data: object }, tokenKey, { expiresIn: tokenExpiry });
             resolve(token);
         } catch (error) {
-            reject("An error occured while creating the token: ", error);
+            reject("An error occured while creating the token: " + error.message);
         }
     });
 };
@@ -73,13 +73,14 @@ const checkUserAuthorized = () => {
             const parts = await authHeader.split(" ");
             const headerAuthorization = parts.length === 2 ? parts[1] : null;
 
-            const jwt = headerAuthorization || req?.headers["jwt"] || req?.headers["token"];
-            const authorize = await verifyUserToken(jwt);
+            const jwtToken = headerAuthorization || req?.headers["jwt"] || req?.headers["token"];
+            const authorize = await verifyUserToken(jwtToken);
 
             if (!authorize || !authorize?.id || !authorize?.email) {
                 res.json(resultObject(false, "Token is invalid!"));
                 return;
             } else {
+                req.user = authorize;
                 next();
             }
         } catch (error) {
@@ -91,19 +92,93 @@ const checkUserAuthorized = () => {
 
 const verifyUserToken = (token) => {
     return new Promise((resolve, reject) => {
-        if (token) {
-            var data = jwt.verify(token, tokenKey);
+        if (!token) {
+            resolve(null);
+            return;
+        }
+
+        try {
+            const data = jwt.verify(token, tokenKey);
             if (data?.data) {
-                checkDataTokenValidation(data?.data, (result) => {
-                    if (result) resolve(data?.data);
-                    else resolve(null);
-                });
-            } else resolve(data?.data);
-        } else {
-            resultObject(false, "Token must be provided!");
-            resolve(false);
+                resolve(data.data);
+            } else {
+                resolve(null);
+            }
+        } catch (error) {
+            console.error("Token verification error:", error.message);
+            resolve(null);
         }
     });
+};
+
+/**
+ * Utility function to validate email format
+ */
+const validateEmail = (email) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+};
+
+/**
+ * Utility function to validate phone number format
+ */
+const validatePhoneNumber = (phoneNumber) => {
+    const phoneRegex = /^\+?[1-9]\d{1,14}$/;
+    return phoneRegex.test(phoneNumber.replace(/[\s-]/g, ''));
+};
+
+/**
+ * Utility function to sanitize user input
+ */
+const sanitizeInput = (input) => {
+    if (typeof input !== 'string') return input;
+    
+    return input
+        .trim()
+        .replace(/[<>]/g, '') // Remove potential HTML tags
+        .substring(0, 1000); // Limit length
+};
+
+/**
+ * Utility function to generate random string
+ */
+const generateRandomString = (length = 10) => {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let result = '';
+    for (let i = 0; i < length; i++) {
+        result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+};
+
+/**
+ * Utility function to format currency
+ */
+const formatCurrency = (amount, currency = 'USD') => {
+    return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: currency,
+    }).format(amount);
+};
+
+/**
+ * Utility function to calculate pagination
+ */
+const calculatePagination = (page, limit, total) => {
+    const currentPage = Math.max(1, parseInt(page) || 1);
+    const itemsPerPage = Math.max(1, Math.min(100, parseInt(limit) || 10));
+    const totalPages = Math.ceil(total / itemsPerPage);
+    const offset = (currentPage - 1) * itemsPerPage;
+    
+    return {
+        page: currentPage,
+        limit: itemsPerPage,
+        total,
+        totalPages,
+        offset,
+        hasNextPage: currentPage < totalPages,
+        hasPrevPage: currentPage > 1
+    };
 };
 
 module.exports = {
@@ -118,4 +193,10 @@ module.exports = {
     verifyUserToken,
     checkUserAuthorized,
     getToken,
+    validateEmail,
+    validatePhoneNumber,
+    sanitizeInput,
+    generateRandomString,
+    formatCurrency,
+    calculatePagination
 };

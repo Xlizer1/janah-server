@@ -7,12 +7,19 @@
   "private": true,
   "scripts": {
     "dev": "nodemon index.js",
-    "performance-test": "node scripts/performanceTest.js",
-    "validate-data": "node scripts/dataValidation.js",
-    "seed-data": "node scripts/seedData.js",
-    "backup-db": "mysqldump -u $DB_USER -p$DB_PASSWORD $DB_NAME > backup_$(date +%Y%m%d_%H%M%S).sql"
+    "start": "node index.js",
+    "db:setup": "node scripts/setupDatabase.js",
+    "db:migrate": "node scripts/migrateToCategoriesTable.js",
+    "db:validate": "node scripts/migrateToCategoriesTable.js validate",
+    "test:middleware": "node scripts/testMiddleware.js",
+    "test:performance": "node scripts/performanceTest.js",
+    "test:data": "node scripts/dataValidation.js",
+    "admin:create": "node scripts/createAdmin.js",
+    "cleanup:codes": "node scripts/cleanupExpiredCodes.js",
+    "backup:db": "mysqldump -u $DB_USER -p$DB_PASSWORD $DB_NAME > backup_$(date +%Y%m%d_%H%M%S).sql"
   },
   "dependencies": {
+    "axios": "^1.6.0",
     "bcrypt": "^6.0.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
@@ -27,10 +34,10 @@
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.0.0",
     "mysql2": "^3.14.1",
-    "twilio": "^5.7.0",
-    "uuid": "^11.1.0",
     "papaparse": "^5.4.1",
-    "axios": "^1.6.0"
+    "redis": "^4.6.0",
+    "twilio": "^5.3.7",
+    "uuid": "^11.1.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.10"
