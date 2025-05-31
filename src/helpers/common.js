@@ -11,7 +11,7 @@ const saltRounds = SALT_ROUNDS || 10;
 
 // Define the encryption algorithm, key, and IV (Initialization Vector)
 const algorithm = "aes-256-cbc";
-const secretKey = Buffer.from(SECRET_KEY, "hex");
+const secretKey = Buffer.from(SECRET_KEY || "hola_amigos", "hex");
 const iv = crypto.randomBytes(16); // A 16-byte IV
 
 function encryptObject(obj) {
