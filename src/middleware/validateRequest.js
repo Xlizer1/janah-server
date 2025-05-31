@@ -1,5 +1,3 @@
-const { ValidationError } = require("../helpers/errors");
-
 const validateRequest = (schema) => {
     return (req, res, next) => {
         const payload = {
