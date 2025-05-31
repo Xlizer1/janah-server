@@ -1,69 +1,87 @@
-const jwt = require("jsonwebtoken");
-const { resultObject } = require("../helpers/common");
-const { CustomError, AuthorizationError } = require("./errorHandler");
+const { verifyUserToken, resultObject } = require("../helpers/common");
 
-const authenticateToken = (req, res, next) => {
+const authenticateToken = async (req, res, next) => {
   try {
-    const token = req.headers["jwt"];
+    // Extract token from Authorization header
+    const authHeader = req.headers.authorization;
+    const token =
+      authHeader && authHeader.startsWith("Bearer ")
+        ? authHeader.substring(7)
+        : null;
 
     if (!token) {
-      throw new CustomError("Access token is required", 401);
+      return res
+        .status(401)
+        .json(resultObject(false, "Access token is required", null, 401));
     }
 
-    if (!process.env.JWT_SECRET) {
-      console.error("JWT_SECRET is not set in environment variables");
-      throw new CustomError("Server configuration error", 500);
+    // Verify token using the helper function
+    const decoded = await verifyUserToken(token);
+
+    if (!decoded) {
+      return res
+        .status(401)
+        .json(resultObject(false, "Invalid or expired token", null, 401));
     }
 
-    try {
-      const decoded = jwt.verifyUserToken(token, process.env.JWT_SECRET);
-      req.user = decoded;
-      next();
-    } catch (jwtError) {
-      if (jwtError.name === "TokenExpiredError") {
-        throw new CustomError("Token has expired", 401);
-      }
-      throw new CustomError("Invalid token", 401);
-    }
+    // Set user in request object
+    req.user = decoded;
+    next();
   } catch (error) {
     console.error("Authentication error:", error);
     return res
-      .status(error.statusCode || 500)
-      .json(
-        resultObject(
-          false,
-          error instanceof CustomError
-            ? error.message
-            : "Authentication failed",
-          null,
-          error instanceof CustomError ? error.statusCode : 500
-        )
-      );
+      .status(401)
+      .json(resultObject(false, "Authentication failed", null, 401));
   }
 };
 
 const requireAdmin = async (req, res, next) => {
   try {
     if (!req.user) {
-      throw new AuthenticationError("Authentication required");
+      return res
+        .status(401)
+        .json(resultObject(false, "Authentication required", null, 401));
     }
 
     if (req.user.role !== "admin") {
-      throw new AuthorizationError("Admin access required");
+      return res
+        .status(403)
+        .json(resultObject(false, "Admin access required", null, 403));
     }
 
     next();
   } catch (error) {
-    console.log(error);
+    console.error("Authorization error:", error);
+    return res
+      .status(403)
+      .json(resultObject(false, "Access denied", null, 403));
   }
 };
 
 const optionalAuth = async (req, res, next) => {
-  next();
+  try {
+    const authHeader = req.headers.authorization;
+    const token =
+      authHeader && authHeader.startsWith("Bearer ")
+        ? authHeader.substring(7)
+        : null;
+
+    if (token) {
+      const decoded = await verifyUserToken(token);
+      if (decoded) {
+        req.user = decoded;
+      }
+    }
+
+    next();
+  } catch (error) {
+    // Continue without authentication for optional auth
+    next();
+  }
 };
 
 module.exports = {
   authenticateToken,
   requireAdmin,
-  optionalAuth
+  optionalAuth,
 };

@@ -1,4 +1,4 @@
-const { ProductModel } = require("./model");
+const ProductModel = require("./model");
 const { NotFoundError } = require("../../../middleware/errorHandler");
 
 class ProductController {

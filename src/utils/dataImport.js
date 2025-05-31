@@ -1,4 +1,5 @@
 const Papa = require("papaparse");
+const ProductModel = require("../api/v1/products/model");
 const fs = require("fs").promises;
 
 class DataImporter {
