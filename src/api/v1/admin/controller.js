@@ -1,9 +1,7 @@
-// src/api/v1/admin/controller.js
 const UserModel = require('../auth/model');
 const TwilioService = require('../../../services/twilio');
 const { 
-    NotFoundError, 
-    AuthorizationError, 
+    NotFoundError,
     BusinessLogicError 
 } = require('../../../middleware/errorHandler');
 

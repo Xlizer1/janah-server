@@ -1,6 +1,6 @@
 const jwt = require("jsonwebtoken");
 const { resultObject } = require("../helpers/common");
-const { CustomError } = require("./errorHandler");
+const { CustomError, AuthorizationError } = require("./errorHandler");
 
 const authenticateToken = (req, res, next) => {
   try {

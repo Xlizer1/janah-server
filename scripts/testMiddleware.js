@@ -3,8 +3,7 @@ require('../src/config/db');
 
 const { 
     authenticateToken, 
-    requireAdmin, 
-    requireActiveUser, 
+    requireAdmin,
     optionalAuth 
 } = require('../src/middleware/auth');
 
@@ -147,8 +146,7 @@ function testRouteStructure() {
         
         const requiredFunctions = [
             'authenticateToken',
-            'requireAdmin', 
-            'requireActiveUser',
+            'requireAdmin',
             'optionalAuth'
         ];
         

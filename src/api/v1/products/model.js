@@ -116,6 +116,10 @@ class ProductModel {
     }
   }
 
+  static async findBySlug() {
+    return null;
+  }
+
   /**
    * Get all categories
    */
@@ -194,6 +198,4 @@ class ProductModel {
   }
 }
 
-module.exports = {
-  ProductModel,
-};
+module.exports = ProductModel;

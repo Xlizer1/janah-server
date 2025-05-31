@@ -17,7 +17,7 @@
     "test:data": "node scripts/dataValidation.js",
     "admin:create": "node scripts/createAdmin.js",
     "cleanup:codes": "node scripts/cleanupExpiredCodes.js",
-    "backup:db": "mysqldump -u $DB_USER -p$DB_PASSWORD $DB_NAME > backup_$(date +%Y%m%d_%H%M%S).sql"
+    "backup:db": "mysqldump -u $root -p$DB_PASSWORD $janahdb > backup_$(date +%Y%m%d_%H%M%S).sql"
   },
   "dependencies": {
     "axios": "^1.6.0",
