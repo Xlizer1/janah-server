@@ -111,13 +111,7 @@ const verifyUserToken = (token) => {
     }
 
     try {
-      console.log(
-        "Verifying token with key:",
-        tokenKey ? "Key exists" : "Key missing"
-      );
       const data = jwt.verify(token, tokenKey);
-
-      console.log("Token verification successful:", data);
 
       if (data?.data) {
         resolve(data.data);
