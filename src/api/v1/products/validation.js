@@ -84,6 +84,7 @@ const updateProductSchema = Joi.object({
 });
 
 const updateStockSchema = Joi.object({
+  product_id: Joi.number().optional(),
   stock_quantity: Joi.number().integer().min(0).required().messages({
     "number.base": "Stock quantity must be a number",
     "number.integer": "Stock quantity must be an integer",

@@ -12,12 +12,12 @@ class ProductController {
    */
   static async getAllProducts(req, res) {
     try {
-      const { page, limit, category, min_price, max_price, search } = req.query;
+      const { page, limit, category_id, min_price, max_price, search } = req.query;
 
       const options = {
         page: parseInt(page) || 1,
         limit: parseInt(limit) || 10,
-        category,
+        categoryId: category_id,
         minPrice: min_price ? parseFloat(min_price) : undefined,
         maxPrice: max_price ? parseFloat(max_price) : undefined,
         search,
