@@ -72,8 +72,30 @@ router.get(
 );
 
 /**
+ * @route GET /api/v1/products/category-code/:category_code
+ * @desc Get products by category code
+ * @access Public
+ */
+router.get(
+  "/category-code/:category_code",
+  validateRequest(getProductsSchema),
+  asyncHandler(ProductController.getProductsByCategoryCode)
+);
+
+/**
+ * @route GET /api/v1/products/full-code/:full_code
+ * @desc Get product by full code (category_code + product_code)
+ * @access Public
+ */
+router.get(
+  "/full-code/:full_code",
+  optionalAuth,
+  asyncHandler(ProductController.getProductByFullCode)
+);
+
+/**
  * @route GET /api/v1/products/:product_id
- * @desc Get product by ID or slug
+ * @desc Get product by ID, slug, or code (including full code detection)
  * @access Public
  */
 router.get(

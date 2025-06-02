@@ -31,6 +31,15 @@ router.get('/search',
     asyncHandler(CategoryController.searchCategories)
 );
 
+/**
+ * @route GET /api/v1/categories/code/:code
+ * @desc Get category by code
+ * @access Public
+ */
+router.get('/code/:code', 
+    asyncHandler(CategoryController.getCategoryByCode)
+);
+
 router.get('/:identifier', 
     asyncHandler(CategoryController.getCategory)
 );

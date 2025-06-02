@@ -3,6 +3,7 @@ const CategoryModel = require("../categories/model");
 const {
   NotFoundError,
   ValidationError,
+  ConflictError,
 } = require("../../../middleware/errorHandler");
 
 class ProductController {
@@ -131,6 +132,7 @@ class ProductController {
           category: {
             id: category.id,
             name: category.name,
+            code: category.code,
             slug: category.slug,
           },
         },
@@ -141,17 +143,58 @@ class ProductController {
   }
 
   /**
-   * Get product by ID or slug
+   * Get product by ID, slug, or full code
    */
   static async getProductById(req, res) {
     try {
       const { product_id } = req.params;
 
-      // Check if it's numeric (ID) or string (slug)
-      const isNumeric = /^\d+$/.test(product_id);
-      const product = isNumeric
-        ? await ProductModel.findById(product_id)
-        : await ProductModel.findBySlug(product_id);
+      let product = null;
+
+      // Check if it's numeric (ID)
+      if (/^\d+$/.test(product_id)) {
+        product = await ProductModel.findById(product_id);
+      }
+      // Check if it might be a full code (category_code + product_code)
+      else if (/^[A-Z0-9]+$/.test(product_id)) {
+        product = await ProductModel.findByFullCode(product_id);
+        // If not found by full code, try by product code only
+        if (!product) {
+          product = await ProductModel.findByCode(product_id);
+        }
+      }
+      // Otherwise treat as slug
+      else {
+        product = await ProductModel.findBySlug(product_id);
+      }
+
+      if (!product) {
+        throw new NotFoundError("Product not found");
+      }
+
+      // Don't show inactive products to regular users
+      if (!product.is_active && req.user?.role !== "admin") {
+        throw new NotFoundError("Product not found");
+      }
+
+      res.json({
+        status: true,
+        message: "Product retrieved successfully",
+        data: { product },
+      });
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Get product by full code (category_code + product_code)
+   */
+  static async getProductByFullCode(req, res) {
+    try {
+      const { full_code } = req.params;
+
+      const product = await ProductModel.findByFullCode(full_code);
 
       if (!product) {
         throw new NotFoundError("Product not found");
@@ -234,6 +277,14 @@ class ProductController {
         is_active: true,
       };
 
+      // Validate category exists if category_id is provided
+      if (productData.category_id) {
+        const category = await CategoryModel.findById(productData.category_id);
+        if (!category) {
+          throw new ValidationError("Invalid category ID");
+        }
+      }
+
       const product = await ProductModel.createProduct(productData);
 
       res.status(201).json({
@@ -253,6 +304,14 @@ class ProductController {
       const existingProduct = await ProductModel.findById(product_id);
       if (!existingProduct) {
         throw new NotFoundError("Product not found");
+      }
+
+      // Validate category exists if category_id is being updated
+      if (req.body.category_id) {
+        const category = await CategoryModel.findById(req.body.category_id);
+        if (!category) {
+          throw new ValidationError("Invalid category ID");
+        }
       }
 
       const updatedProduct = await ProductModel.updateProduct(
@@ -314,6 +373,48 @@ class ProductController {
         status: true,
         message: "Products retrieved successfully",
         data: result,
+      });
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Get products by category code
+   */
+  static async getProductsByCategoryCode(req, res) {
+    try {
+      const { category_code } = req.params;
+      const { page, limit, sort_by, sort_order } = req.query;
+
+      const category = await CategoryModel.findByCode(category_code);
+      if (!category) {
+        throw new NotFoundError("Category not found");
+      }
+
+      const options = {
+        page: parseInt(page) || 1,
+        limit: parseInt(limit) || 10,
+        categoryId: category.id,
+        isActive: true,
+        sortBy: sort_by,
+        sortOrder: sort_order,
+      };
+
+      const result = await ProductModel.getAllProducts(options);
+
+      res.json({
+        status: true,
+        message: `Products in category '${category.name}' (${category.code}) retrieved successfully`,
+        data: {
+          ...result,
+          category: {
+            id: category.id,
+            name: category.name,
+            code: category.code,
+            slug: category.slug,
+          },
+        },
       });
     } catch (error) {
       throw error;

@@ -11,7 +11,7 @@ const getProductsSchema = Joi.object({
   is_featured: Joi.boolean().optional(),
   category_slug: Joi.string().optional(),
   sort_by: Joi.string()
-    .valid("name", "price", "created_at", "stock_quantity")
+    .valid("name", "price", "created_at", "stock_quantity", "code", "full_code")
     .optional(),
   sort_order: Joi.string().valid("ASC", "DESC", "asc", "desc").optional(),
   is_active: Joi.boolean().optional(),
@@ -24,7 +24,7 @@ const searchProductsSchema = Joi.object({
     "any.required": "Search term is required",
   }),
   sort_by: Joi.string()
-    .valid("name", "price", "created_at", "relevance")
+    .valid("name", "price", "created_at", "relevance", "full_code")
     .optional(),
   sort_order: Joi.string().valid("ASC", "DESC", "asc", "desc").optional(),
   limit: Joi.number().integer().min(1).max(100).default(20),
@@ -33,6 +33,18 @@ const searchProductsSchema = Joi.object({
 
 const createProductSchema = Joi.object({
   name: Joi.string().min(2).max(255).required(),
+  code: Joi.string()
+    .min(1)
+    .max(50)
+    .pattern(/^[A-Z0-9]+$/)
+    .required()
+    .messages({
+      "string.min": "Product code must be at least 1 character long",
+      "string.max": "Product code cannot exceed 50 characters",
+      "string.pattern.base":
+        "Product code must contain only uppercase letters and numbers",
+      "any.required": "Product code is required",
+    }),
   slug: Joi.string().min(2).max(255).optional(),
   description: Joi.string().max(1000).optional(),
   price: Joi.number().positive().precision(2).required(),
@@ -47,6 +59,17 @@ const createProductSchema = Joi.object({
 
 const updateProductSchema = Joi.object({
   name: Joi.string().min(2).max(255).optional(),
+  code: Joi.string()
+    .min(1)
+    .max(50)
+    .pattern(/^[A-Z0-9]+$/)
+    .optional()
+    .messages({
+      "string.min": "Product code must be at least 1 character long",
+      "string.max": "Product code cannot exceed 50 characters",
+      "string.pattern.base":
+        "Product code must contain only uppercase letters and numbers",
+    }),
   slug: Joi.string().min(2).max(255).optional(),
   description: Joi.string().max(1000).optional(),
   price: Joi.number().positive().precision(2).optional(),
