@@ -6,6 +6,7 @@ const authRouter = require("./auth/router");
 const adminRouter = require("./admin/router");
 const categoryRouter = require("./categories/router");
 const productRouter = require("./products/router");
+const orderRouter = require("./orders/router"); // NEW: Order routes
 const analyticsRouter = require("./analytics/router");
 const bulkRouter = require("./bulk/router");
 const searchRouter = require("./search/router");
@@ -25,6 +26,9 @@ router.use("/categories", categoryRouter);
 
 // Product routes
 router.use("/products", productRouter);
+
+// Order routes
+router.use("/orders", orderRouter);
 
 // Analytics routes
 router.use("/analytics", analyticsRouter);
