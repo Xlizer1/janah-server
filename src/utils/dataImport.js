@@ -46,7 +46,6 @@ class DataImporter {
             price: parseFloat(row.price),
             stock_quantity: parseInt(row.stock_quantity) || 0,
             category_id: parseInt(row.category_id),
-            sku: row.sku,
             weight: row.weight ? parseFloat(row.weight) : null,
             dimensions: row.dimensions,
             is_featured: row.is_featured === "true" || row.is_featured === "1",
@@ -205,7 +204,6 @@ class DataImporter {
         category_name: product.category_name,
         category_code: product.category_code, // Include category code
         full_code: product.full_code, // Include full code
-        sku: product.sku,
         weight: product.weight,
         dimensions: product.dimensions,
         is_active: product.is_active,
@@ -264,7 +262,6 @@ class DataImporter {
         price: 99.99,
         stock_quantity: 50,
         category_id: 1,
-        sku: "SKU001",
         weight: 1.5,
         dimensions: "10x5x3",
         is_featured: false,
@@ -277,7 +274,6 @@ class DataImporter {
         price: 149.99,
         stock_quantity: 25,
         category_id: 2,
-        sku: "SKU002",
         weight: 2.0,
         dimensions: "15x8x4",
         is_featured: true,

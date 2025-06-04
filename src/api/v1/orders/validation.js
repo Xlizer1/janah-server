@@ -59,6 +59,7 @@ const updateOrderStatusSchema = Joi.object({
   notes: Joi.string().max(1000).optional().messages({
     "string.max": "Notes cannot exceed 1000 characters",
   }),
+  order_id: Joi.number().optional(),
 });
 
 // Cancel order validation schema

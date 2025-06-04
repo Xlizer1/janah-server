@@ -12,11 +12,13 @@
     "db:setup": "node scripts/setupDatabase.js",
     "db:migrate": "node scripts/migrateToCategoriesTable.js",
     "db:validate": "node scripts/migrateToCategoriesTable.js validate",
+    "db:migrate-uploads": "node scripts/migrateForUploads.js",
     "test:middleware": "node scripts/testMiddleware.js",
     "test:performance": "node scripts/performanceTest.js",
     "test:data": "node scripts/dataValidation.js",
     "admin:create": "node scripts/createAdmin.js",
     "cleanup:codes": "node scripts/cleanupExpiredCodes.js",
+    "cleanup:files": "node scripts/cleanupTempFiles.js",
     "backup:db": "mysqldump -u $root -p$DB_PASSWORD $janahdb > backup_$(date +%Y%m%d_%H%M%S).sql"
   },
   "dependencies": {
@@ -37,6 +39,7 @@
     "mysql2": "^3.14.1",
     "papaparse": "^5.4.1",
     "redis": "^4.6.0",
+    "sharp": "^0.33.2",
     "twilio": "^5.3.7",
     "uuid": "^11.1.0"
   },

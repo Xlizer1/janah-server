@@ -4,6 +4,7 @@ const {
   ConflictError,
   ValidationError,
 } = require("../../../middleware/errorHandler");
+const { FileUploadService } = require("../../../middleware/multer");
 
 class CategoryController {
   /**
@@ -20,6 +21,14 @@ class CategoryController {
       };
 
       const result = await CategoryModel.getAllCategories(options);
+
+      // Convert file paths to URLs
+      result.categories = result.categories.map((category) => ({
+        ...category,
+        image_url: category.image_url
+          ? FileUploadService.getFileUrl(req, category.image_url)
+          : null,
+      }));
 
       res.json({
         status: true,
@@ -41,10 +50,18 @@ class CategoryController {
         includeEmpty
       );
 
+      // Convert file paths to URLs
+      const categoriesWithUrls = categories.map((category) => ({
+        ...category,
+        image_url: category.image_url
+          ? FileUploadService.getFileUrl(req, category.image_url)
+          : null,
+      }));
+
       res.json({
         status: true,
         message: "Categories with product counts retrieved successfully",
-        data: { categories },
+        data: { categories: categoriesWithUrls },
       });
     } catch (error) {
       throw error;
@@ -73,6 +90,11 @@ class CategoryController {
         category.id
       );
 
+      // Convert file path to URL
+      categoryWithCount.image_url = categoryWithCount.image_url
+        ? FileUploadService.getFileUrl(req, categoryWithCount.image_url)
+        : null;
+
       res.json({
         status: true,
         message: "Category retrieved successfully",
@@ -90,10 +112,18 @@ class CategoryController {
     try {
       const categories = await CategoryModel.getCategoryOptions();
 
+      // Convert file paths to URLs
+      const categoriesWithUrls = categories.map((category) => ({
+        ...category,
+        image_url: category.image_url
+          ? FileUploadService.getFileUrl(req, category.image_url)
+          : null,
+      }));
+
       res.json({
         status: true,
         message: "Category options retrieved successfully",
-        data: { categories },
+        data: { categories: categoriesWithUrls },
       });
     } catch (error) {
       throw error;
@@ -117,10 +147,18 @@ class CategoryController {
         searchTerm.trim()
       );
 
+      // Convert file paths to URLs
+      const categoriesWithUrls = categories.map((category) => ({
+        ...category,
+        image_url: category.image_url
+          ? FileUploadService.getFileUrl(req, category.image_url)
+          : null,
+      }));
+
       res.json({
         status: true,
         message: "Categories found",
-        data: { categories },
+        data: { categories: categoriesWithUrls },
       });
     } catch (error) {
       throw error;
@@ -134,7 +172,12 @@ class CategoryController {
    */
   static async createCategory(req, res) {
     try {
-      const categoryData = req.body;
+      const categoryData = { ...req.body };
+
+      // Handle uploaded image
+      if (req.file) {
+        categoryData.image_url = req.file.path;
+      }
 
       // Check if code already exists
       if (categoryData.code) {
@@ -142,6 +185,10 @@ class CategoryController {
           categoryData.code
         );
         if (existingByCode) {
+          // Delete uploaded file if validation fails
+          if (req.file) {
+            await FileUploadService.deleteFile(req.file.path);
+          }
           throw new ConflictError(
             `Category code '${categoryData.code}' already exists`
           );
@@ -154,10 +201,19 @@ class CategoryController {
       );
 
       if (existingCategory) {
+        // Delete uploaded file if validation fails
+        if (req.file) {
+          await FileUploadService.deleteFile(req.file.path);
+        }
         throw new ConflictError("A category with this name already exists");
       }
 
       const category = await CategoryModel.createCategory(categoryData);
+
+      // Convert file path to URL for response
+      category.image_url = category.image_url
+        ? FileUploadService.getFileUrl(req, category.image_url)
+        : null;
 
       res.status(201).json({
         status: true,
@@ -165,6 +221,10 @@ class CategoryController {
         data: { category },
       });
     } catch (error) {
+      // Delete uploaded file if error occurs
+      if (req.file) {
+        await FileUploadService.deleteFile(req.file.path);
+      }
       throw error;
     }
   }
@@ -175,11 +235,28 @@ class CategoryController {
   static async updateCategory(req, res) {
     try {
       const { category_id } = req.params;
-      const updateData = req.body;
+      const updateData = { ...req.body };
 
       const existingCategory = await CategoryModel.findById(category_id);
       if (!existingCategory) {
+        // Delete uploaded file if category doesn't exist
+        if (req.file) {
+          await FileUploadService.deleteFile(req.file.path);
+        }
         throw new NotFoundError("Category not found");
+      }
+
+      // Handle uploaded image
+      if (req.file) {
+        updateData.image_url = req.file.path;
+
+        // Delete old image file if it exists and is a local file
+        if (
+          existingCategory.image_url &&
+          !existingCategory.image_url.startsWith("http")
+        ) {
+          await FileUploadService.deleteFile(existingCategory.image_url);
+        }
       }
 
       // Check for code conflicts if code is being updated
@@ -189,6 +266,10 @@ class CategoryController {
           category_id
         );
         if (codeExists) {
+          // Delete uploaded file if validation fails
+          if (req.file) {
+            await FileUploadService.deleteFile(req.file.path);
+          }
           throw new ConflictError(
             `Category code '${updateData.code}' already exists`
           );
@@ -202,6 +283,10 @@ class CategoryController {
           category_id
         );
         if (slugExists) {
+          // Delete uploaded file if validation fails
+          if (req.file) {
+            await FileUploadService.deleteFile(req.file.path);
+          }
           throw new ConflictError("A category with this slug already exists");
         }
       }
@@ -211,12 +296,21 @@ class CategoryController {
         updateData
       );
 
+      // Convert file path to URL for response
+      updatedCategory.image_url = updatedCategory.image_url
+        ? FileUploadService.getFileUrl(req, updatedCategory.image_url)
+        : null;
+
       res.json({
         status: true,
         message: "Category updated successfully",
         data: { category: updatedCategory },
       });
     } catch (error) {
+      // Delete uploaded file if error occurs
+      if (req.file) {
+        await FileUploadService.deleteFile(req.file.path);
+      }
       throw error;
     }
   }
@@ -231,6 +325,14 @@ class CategoryController {
       const existingCategory = await CategoryModel.findById(category_id);
       if (!existingCategory) {
         throw new NotFoundError("Category not found");
+      }
+
+      // Delete associated image file if it exists and is a local file
+      if (
+        existingCategory.image_url &&
+        !existingCategory.image_url.startsWith("http")
+      ) {
+        await FileUploadService.deleteFile(existingCategory.image_url);
       }
 
       const deleted = await CategoryModel.deleteCategory(category_id);
@@ -276,6 +378,11 @@ class CategoryController {
       if (!category) {
         throw new NotFoundError("Category not found");
       }
+
+      // Convert file path to URL
+      category.image_url = category.image_url
+        ? FileUploadService.getFileUrl(req, category.image_url)
+        : null;
 
       res.json({
         status: true,

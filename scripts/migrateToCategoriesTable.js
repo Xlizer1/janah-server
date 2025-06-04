@@ -182,7 +182,6 @@ async function migrateToCategoriesTable() {
             { name: 'is_featured', definition: 'BOOLEAN DEFAULT FALSE AFTER is_active' },
             { name: 'weight', definition: 'DECIMAL(8, 2) AFTER is_featured' },
             { name: 'dimensions', definition: 'VARCHAR(100) AFTER weight' },
-            { name: 'sku', definition: 'VARCHAR(100) UNIQUE AFTER dimensions' }
         ];
         
         for (const column of newColumns) {
@@ -215,13 +214,12 @@ async function migrateToCategoriesTable() {
             try {
                 await connection.execute(`
                     UPDATE products 
-                    SET slug = ?, category_id = ?, is_featured = ?, sku = ?
+                    SET slug = ?, category_id = ?, is_featured = ?
                     WHERE id = ?
                 `, [
                     slug,
                     categoryId,
                     false, // Default not featured
-                    `PROD${String(productId).padStart(6, '0')}`, // Generate SKU
                     productId
                 ]);
                 
@@ -260,7 +258,6 @@ async function migrateToCategoriesTable() {
         const indexes = [
             'CREATE INDEX IF NOT EXISTS idx_products_category ON products(category_id)',
             'CREATE INDEX IF NOT EXISTS idx_products_slug ON products(slug)',
-            'CREATE INDEX IF NOT EXISTS idx_products_sku ON products(sku)',
             'CREATE INDEX IF NOT EXISTS idx_products_featured ON products(is_featured)'
         ];
         
@@ -288,7 +285,6 @@ async function migrateToCategoriesTable() {
         console.log(`   ✅ Categories table created with ${categoryMap.size} categories`);
         console.log(`   ✅ Products updated: ${updatedCount}`);
         console.log(`   ✅ Products skipped: ${skippedCount}`);
-        console.log('   ✅ New columns added: slug, category_id, is_featured, weight, dimensions, sku');
         console.log('   ✅ Foreign key constraint added');
         console.log('   ✅ Database indexes created');
         console.log('\n🔧 Next Steps:');
@@ -304,7 +300,7 @@ async function migrateToCategoriesTable() {
         
         // Basic rollback - remove new columns if they were added
         try {
-            const columnsToRemove = ['slug', 'category_id', 'is_featured', 'weight', 'dimensions', 'sku'];
+            const columnsToRemove = ['slug', 'category_id', 'is_featured', 'weight', 'dimensions'];
             for (const column of columnsToRemove) {
                 try {
                     await connection.execute(`ALTER TABLE products DROP COLUMN ${column}`);

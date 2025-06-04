@@ -5,6 +5,7 @@ const {
   ValidationError,
   ConflictError,
 } = require("../../../middleware/errorHandler");
+const { FileUploadService } = require("../../../middleware/multer");
 
 class ProductController {
   /**
@@ -12,7 +13,8 @@ class ProductController {
    */
   static async getAllProducts(req, res) {
     try {
-      const { page, limit, category_id, min_price, max_price, search } = req.query;
+      const { page, limit, category_id, min_price, max_price, search } =
+        req.query;
 
       const options = {
         page: parseInt(page) || 1,
@@ -25,6 +27,14 @@ class ProductController {
       };
 
       const result = await ProductModel.getAllProducts(options);
+
+      // Convert file paths to URLs
+      result.products = result.products.map((product) => ({
+        ...product,
+        image_url: product.image_url
+          ? FileUploadService.getFileUrl(req, product.image_url)
+          : null,
+      }));
 
       res.json({
         status: true,
@@ -45,6 +55,14 @@ class ProductController {
       const limitNum = parseInt(limit) || 10;
 
       const result = await ProductModel.getFeaturedProducts(limitNum);
+
+      // Convert file paths to URLs
+      result.products = result.products.map((product) => ({
+        ...product,
+        image_url: product.image_url
+          ? FileUploadService.getFileUrl(req, product.image_url)
+          : null,
+      }));
 
       res.json({
         status: true,
@@ -80,6 +98,14 @@ class ProductController {
         searchTerm.trim(),
         options
       );
+
+      // Convert file paths to URLs
+      result.products = result.products.map((product) => ({
+        ...product,
+        image_url: product.image_url
+          ? FileUploadService.getFileUrl(req, product.image_url)
+          : null,
+      }));
 
       res.json({
         status: true,
@@ -124,6 +150,14 @@ class ProductController {
 
       const result = await ProductModel.getAllProducts(options);
 
+      // Convert file paths to URLs
+      result.products = result.products.map((product) => ({
+        ...product,
+        image_url: product.image_url
+          ? FileUploadService.getFileUrl(req, product.image_url)
+          : null,
+      }));
+
       res.json({
         status: true,
         message: `Products in category '${category.name}' retrieved successfully`,
@@ -134,6 +168,9 @@ class ProductController {
             name: category.name,
             code: category.code,
             slug: category.slug,
+            image_url: category.image_url
+              ? FileUploadService.getFileUrl(req, category.image_url)
+              : null,
           },
         },
       });
@@ -177,6 +214,11 @@ class ProductController {
         throw new NotFoundError("Product not found");
       }
 
+      // Convert file path to URL
+      product.image_url = product.image_url
+        ? FileUploadService.getFileUrl(req, product.image_url)
+        : null;
+
       res.json({
         status: true,
         message: "Product retrieved successfully",
@@ -204,6 +246,11 @@ class ProductController {
       if (!product.is_active && req.user?.role !== "admin") {
         throw new NotFoundError("Product not found");
       }
+
+      // Convert file path to URL
+      product.image_url = product.image_url
+        ? FileUploadService.getFileUrl(req, product.image_url)
+        : null;
 
       res.json({
         status: true,
@@ -238,6 +285,11 @@ class ProductController {
         stock_quantity,
       });
 
+      // Convert file path to URL
+      updatedProduct.image_url = updatedProduct.image_url
+        ? FileUploadService.getFileUrl(req, updatedProduct.image_url)
+        : null;
+
       res.json({
         status: true,
         message: "Product stock updated successfully",
@@ -259,10 +311,18 @@ class ProductController {
     try {
       const categories = await ProductModel.getCategories();
 
+      // Convert file paths to URLs
+      const categoriesWithUrls = categories.map((category) => ({
+        ...category,
+        image_url: category.image_url
+          ? FileUploadService.getFileUrl(req, category.image_url)
+          : null,
+      }));
+
       res.json({
         status: true,
         message: "Categories retrieved successfully",
-        data: { categories },
+        data: { categories: categoriesWithUrls },
       });
     } catch (error) {
       throw error;
@@ -277,15 +337,29 @@ class ProductController {
         is_active: true,
       };
 
+      // Handle uploaded image
+      if (req.file) {
+        productData.image_url = req.file.path;
+      }
+
       // Validate category exists if category_id is provided
       if (productData.category_id) {
         const category = await CategoryModel.findById(productData.category_id);
         if (!category) {
+          // Delete uploaded file if validation fails
+          if (req.file) {
+            await FileUploadService.deleteFile(req.file.path);
+          }
           throw new ValidationError("Invalid category ID");
         }
       }
 
       const product = await ProductModel.createProduct(productData);
+
+      // Convert file path to URL for response
+      product.image_url = product.image_url
+        ? FileUploadService.getFileUrl(req, product.image_url)
+        : null;
 
       res.status(201).json({
         status: true,
@@ -293,6 +367,10 @@ class ProductController {
         data: { product },
       });
     } catch (error) {
+      // Delete uploaded file if error occurs
+      if (req.file) {
+        await FileUploadService.deleteFile(req.file.path);
+      }
       throw error;
     }
   }
@@ -303,21 +381,49 @@ class ProductController {
 
       const existingProduct = await ProductModel.findById(product_id);
       if (!existingProduct) {
+        // Delete uploaded file if product doesn't exist
+        if (req.file) {
+          await FileUploadService.deleteFile(req.file.path);
+        }
         throw new NotFoundError("Product not found");
       }
 
+      const updateData = { ...req.body };
+
+      // Handle uploaded image
+      if (req.file) {
+        updateData.image_url = req.file.path;
+
+        // Delete old image file if it exists and is a local file
+        if (
+          existingProduct.image_url &&
+          !existingProduct.image_url.startsWith("http")
+        ) {
+          await FileUploadService.deleteFile(existingProduct.image_url);
+        }
+      }
+
       // Validate category exists if category_id is being updated
-      if (req.body.category_id) {
-        const category = await CategoryModel.findById(req.body.category_id);
+      if (updateData.category_id) {
+        const category = await CategoryModel.findById(updateData.category_id);
         if (!category) {
+          // Delete uploaded file if validation fails
+          if (req.file) {
+            await FileUploadService.deleteFile(req.file.path);
+          }
           throw new ValidationError("Invalid category ID");
         }
       }
 
       const updatedProduct = await ProductModel.updateProduct(
         product_id,
-        req.body
+        updateData
       );
+
+      // Convert file path to URL for response
+      updatedProduct.image_url = updatedProduct.image_url
+        ? FileUploadService.getFileUrl(req, updatedProduct.image_url)
+        : null;
 
       res.json({
         status: true,
@@ -325,6 +431,10 @@ class ProductController {
         data: { product: updatedProduct },
       });
     } catch (error) {
+      // Delete uploaded file if error occurs
+      if (req.file) {
+        await FileUploadService.deleteFile(req.file.path);
+      }
       throw error;
     }
   }
@@ -336,6 +446,14 @@ class ProductController {
       const existingProduct = await ProductModel.findById(product_id);
       if (!existingProduct) {
         throw new NotFoundError("Product not found");
+      }
+
+      // Delete associated image file if it exists and is a local file
+      if (
+        existingProduct.image_url &&
+        !existingProduct.image_url.startsWith("http")
+      ) {
+        await FileUploadService.deleteFile(existingProduct.image_url);
       }
 
       const deleted = await ProductModel.deleteProduct(product_id);
@@ -368,6 +486,14 @@ class ProductController {
       };
 
       const result = await ProductModel.getAllProducts(options);
+
+      // Convert file paths to URLs
+      result.products = result.products.map((product) => ({
+        ...product,
+        image_url: product.image_url
+          ? FileUploadService.getFileUrl(req, product.image_url)
+          : null,
+      }));
 
       res.json({
         status: true,
@@ -403,6 +529,14 @@ class ProductController {
 
       const result = await ProductModel.getAllProducts(options);
 
+      // Convert file paths to URLs
+      result.products = result.products.map((product) => ({
+        ...product,
+        image_url: product.image_url
+          ? FileUploadService.getFileUrl(req, product.image_url)
+          : null,
+      }));
+
       res.json({
         status: true,
         message: `Products in category '${category.name}' (${category.code}) retrieved successfully`,
@@ -413,6 +547,9 @@ class ProductController {
             name: category.name,
             code: category.code,
             slug: category.slug,
+            image_url: category.image_url
+              ? FileUploadService.getFileUrl(req, category.image_url)
+              : null,
           },
         },
       });

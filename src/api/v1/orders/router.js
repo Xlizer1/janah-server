@@ -78,6 +78,19 @@ router.get(
 );
 
 /**
+ * @route GET /api/v1/orders/admin/statistics
+ * @desc Get order statistics
+ * @access Admin
+ */
+router.get(
+  "/admin/statistics",
+  authenticateToken,
+  requireAdmin,
+  validateRequest(orderStatisticsSchema),
+  asyncHandler(OrderController.getOrderStatistics)
+);
+
+/**
  * @route GET /api/v1/orders/admin/:order_id
  * @desc Get order by ID with full details
  * @access Admin
@@ -126,19 +139,6 @@ router.get(
   requireAdmin,
   validateRequest(getOrdersSchema),
   asyncHandler(OrderController.getOrdersByStatus)
-);
-
-/**
- * @route GET /api/v1/orders/admin/statistics
- * @desc Get order statistics
- * @access Admin
- */
-router.get(
-  "/admin/statistics",
-  authenticateToken,
-  requireAdmin,
-  validateRequest(orderStatisticsSchema),
-  asyncHandler(OrderController.getOrderStatistics)
 );
 
 /**

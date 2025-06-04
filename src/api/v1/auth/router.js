@@ -1,21 +1,22 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
 
-const AuthController = require('./controller');
-const validateRequest = require('../../../middleware/validateRequest');
-const { authenticateToken } = require('../../../middleware/auth');
-const { asyncHandler } = require('../../../middleware/errorHandler');
+const AuthController = require("./controller");
+const validateRequest = require("../../../middleware/validateRequest");
+const { authenticateToken } = require("../../../middleware/auth");
+const { asyncHandler } = require("../../../middleware/errorHandler");
 
 const {
-    registerSchema,
-    loginSchema,
-    verifyPhoneSchema,
-    resendCodeSchema,
-    forgotPasswordSchema,
-    resetPasswordSchema,
-    changePasswordSchema,
-    updateProfileSchema
-} = require('./validation');
+  registerSchema,
+  loginSchema,
+  verifyPhoneSchema,
+  resendCodeSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema,
+  changePasswordSchema,
+  updateProfileSchema,
+} = require("./validation");
+const { uploadMiddlewares, handleMulterError } = require("../../../middleware/multer");
 
 // Public routes (no authentication required)
 
@@ -24,9 +25,10 @@ const {
  * @desc Register a new user
  * @access Public
  */
-router.post('/register', 
-    validateRequest(registerSchema),
-    asyncHandler(AuthController.register)
+router.post(
+  "/register",
+  validateRequest(registerSchema),
+  asyncHandler(AuthController.register)
 );
 
 /**
@@ -34,9 +36,10 @@ router.post('/register',
  * @desc Verify phone number with verification code
  * @access Public
  */
-router.post('/verify-phone', 
-    validateRequest(verifyPhoneSchema),
-    asyncHandler(AuthController.verifyPhone)
+router.post(
+  "/verify-phone",
+  validateRequest(verifyPhoneSchema),
+  asyncHandler(AuthController.verifyPhone)
 );
 
 /**
@@ -44,9 +47,10 @@ router.post('/verify-phone',
  * @desc Resend verification code
  * @access Public
  */
-router.post('/resend-code', 
-    validateRequest(resendCodeSchema),
-    asyncHandler(AuthController.resendVerificationCode)
+router.post(
+  "/resend-code",
+  validateRequest(resendCodeSchema),
+  asyncHandler(AuthController.resendVerificationCode)
 );
 
 /**
@@ -54,9 +58,10 @@ router.post('/resend-code',
  * @desc User login
  * @access Public
  */
-router.post('/login', 
-    validateRequest(loginSchema),
-    asyncHandler(AuthController.login)
+router.post(
+  "/login",
+  validateRequest(loginSchema),
+  asyncHandler(AuthController.login)
 );
 
 /**
@@ -64,9 +69,10 @@ router.post('/login',
  * @desc Send password reset code
  * @access Public
  */
-router.post('/forgot-password', 
-    validateRequest(forgotPasswordSchema),
-    asyncHandler(AuthController.forgotPassword)
+router.post(
+  "/forgot-password",
+  validateRequest(forgotPasswordSchema),
+  asyncHandler(AuthController.forgotPassword)
 );
 
 /**
@@ -74,9 +80,10 @@ router.post('/forgot-password',
  * @desc Reset password with verification code
  * @access Public
  */
-router.post('/reset-password', 
-    validateRequest(resetPasswordSchema),
-    asyncHandler(AuthController.resetPassword)
+router.post(
+  "/reset-password",
+  validateRequest(resetPasswordSchema),
+  asyncHandler(AuthController.resetPassword)
 );
 
 // Protected routes (authentication required)
@@ -86,20 +93,48 @@ router.post('/reset-password',
  * @desc Get current user profile
  * @access Private
  */
-router.get('/profile', 
-    authenticateToken,
-    asyncHandler(AuthController.getProfile)
+router.get(
+  "/profile",
+  authenticateToken,
+  asyncHandler(AuthController.getProfile)
 );
 
 /**
  * @route PUT /api/v1/auth/profile
- * @desc Update user profile
+ * @desc Update user profile with optional profile picture upload
  * @access Private
  */
-router.put('/profile', 
-    authenticateToken,
-    validateRequest(updateProfileSchema),
-    asyncHandler(AuthController.updateProfile)
+router.put(
+  "/profile",
+  authenticateToken,
+  uploadMiddlewares.user,
+  handleMulterError,
+  validateRequest(updateProfileSchema),
+  asyncHandler(AuthController.updateProfile)
+);
+
+/**
+ * @route POST /api/v1/auth/profile/picture
+ * @desc Upload/Update profile picture
+ * @access Private
+ */
+router.post(
+  "/profile/picture",
+  authenticateToken,
+  uploadMiddlewares.user,
+  handleMulterError,
+  asyncHandler(AuthController.updateProfilePicture)
+);
+
+/**
+ * @route DELETE /api/v1/auth/profile/picture
+ * @desc Remove profile picture
+ * @access Private
+ */
+router.delete(
+  "/profile/picture",
+  authenticateToken,
+  asyncHandler(AuthController.removeProfilePicture)
 );
 
 /**
@@ -107,10 +142,11 @@ router.put('/profile',
  * @desc Change user password
  * @access Private
  */
-router.post('/change-password', 
-    authenticateToken,
-    validateRequest(changePasswordSchema),
-    asyncHandler(AuthController.changePassword)
+router.post(
+  "/change-password",
+  authenticateToken,
+  validateRequest(changePasswordSchema),
+  asyncHandler(AuthController.changePassword)
 );
 
 /**
@@ -118,14 +154,11 @@ router.post('/change-password',
  * @desc Logout user (for completeness - token invalidation handled client-side)
  * @access Private
  */
-router.post('/logout', 
-    authenticateToken,
-    (req, res) => {
-        res.json({
-            status: true,
-            message: 'Logged out successfully'
-        });
-    }
-);
+router.post("/logout", authenticateToken, (req, res) => {
+  res.json({
+    status: true,
+    message: "Logged out successfully",
+  });
+});
 
 module.exports = router;

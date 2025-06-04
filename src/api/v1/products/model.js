@@ -51,7 +51,7 @@ class ProductModel {
 
       if (search) {
         whereConditions.push(
-          "(p.name LIKE ? OR p.description LIKE ? OR p.sku LIKE ? OR p.code LIKE ? OR CONCAT(COALESCE(c.code, ''), p.code) LIKE ?)"
+          "(p.name LIKE ? OR p.description LIKE ? OR p.code LIKE ? OR CONCAT(COALESCE(c.code, ''), p.code) LIKE ?)"
         );
         params.push(
           `%${search}%`,
@@ -111,7 +111,7 @@ class ProductModel {
       // Get products with category information and full code
       const sql = `
                 SELECT p.id, p.name, p.code, p.slug, p.description, p.price, 
-                       p.stock_quantity, p.category_id, p.sku, p.weight, 
+                       p.stock_quantity, p.category_id, p.weight, 
                        p.dimensions, p.is_active, p.is_featured, p.image_url, 
                        p.created_at, p.updated_at,
                        c.name as category_name, c.code as category_code, c.slug as category_slug,
@@ -153,7 +153,7 @@ class ProductModel {
     try {
       const sql = `
                 SELECT p.id, p.name, p.code, p.slug, p.description, p.price, 
-                       p.stock_quantity, p.category_id, p.sku, p.weight, 
+                       p.stock_quantity, p.category_id, p.weight, 
                        p.dimensions, p.is_active, p.is_featured, p.image_url, 
                        p.created_at, p.updated_at,
                        c.name as category_name, c.code as category_code, c.slug as category_slug,
@@ -176,7 +176,7 @@ class ProductModel {
     try {
       const sql = `
                 SELECT p.id, p.name, p.code, p.slug, p.description, p.price, 
-                       p.stock_quantity, p.category_id, p.sku, p.weight, 
+                       p.stock_quantity, p.category_id, p.weight, 
                        p.dimensions, p.is_active, p.is_featured, p.image_url, 
                        p.created_at, p.updated_at,
                        c.name as category_name, c.code as category_code, c.slug as category_slug,
@@ -202,7 +202,7 @@ class ProductModel {
     try {
       const sql = `
                 SELECT p.id, p.name, p.code, p.slug, p.description, p.price, 
-                       p.stock_quantity, p.category_id, p.sku, p.weight, 
+                       p.stock_quantity, p.category_id, p.weight, 
                        p.dimensions, p.is_active, p.is_featured, p.image_url, 
                        p.created_at, p.updated_at,
                        c.name as category_name, c.code as category_code, c.slug as category_slug,
@@ -228,7 +228,7 @@ class ProductModel {
     try {
       const sql = `
                 SELECT p.id, p.name, p.code, p.slug, p.description, p.price, 
-                       p.stock_quantity, p.category_id, p.sku, p.weight, 
+                       p.stock_quantity, p.category_id, p.weight, 
                        p.dimensions, p.is_active, p.is_featured, p.image_url, 
                        p.created_at, p.updated_at,
                        c.name as category_name, c.code as category_code, c.slug as category_slug,
@@ -258,7 +258,7 @@ class ProductModel {
     try {
       const sql = `
                 SELECT p.id, p.name, p.code, p.slug, p.description, p.price, 
-                       p.stock_quantity, p.category_id, p.sku, p.image_url, 
+                       p.stock_quantity, p.category_id, p.image_url, 
                        p.created_at, p.updated_at,
                        c.name as category_name, c.code as category_code, c.slug as category_slug,
                        CONCAT(COALESCE(c.code, ''), p.code) as full_code
@@ -295,7 +295,7 @@ class ProductModel {
       } = options;
 
       let whereConditions = [
-        "(p.name LIKE ? OR p.description LIKE ? OR p.sku LIKE ? OR p.code LIKE ? OR CONCAT(COALESCE(c.code, ''), p.code) LIKE ?)",
+        "(p.name LIKE ? OR p.description LIKE ? OR p.code LIKE ? OR CONCAT(COALESCE(c.code, ''), p.code) LIKE ?)",
       ];
       let params = [
         `%${searchTerm}%`,
@@ -430,11 +430,6 @@ class ProductModel {
         productData.slug = this.generateSlug(productData.name);
       }
 
-      // Generate SKU if not provided
-      if (!productData.sku) {
-        productData.sku = await this.generateSKU();
-      }
-
       // Validate product code uniqueness within the same category
       if (productData.code && productData.category_id) {
         const existingProduct = await this.findProductByCodeAndCategory(
@@ -561,20 +556,6 @@ class ProductModel {
       .replace(/[^\w\s-]/g, "")
       .replace(/[\s_-]+/g, "-")
       .replace(/^-+|-+$/g, "");
-  }
-
-  /**
-   * Generate unique SKU
-   */
-  static async generateSKU() {
-    try {
-      const sql = "SELECT MAX(id) as max_id FROM products";
-      const result = await executeQuery(sql, [], "Get Max Product ID");
-      const nextId = (result[0].max_id || 0) + 1;
-      return `PROD${String(nextId).padStart(6, "0")}`;
-    } catch (error) {
-      return `PROD${Date.now()}`;
-    }
   }
 }
 

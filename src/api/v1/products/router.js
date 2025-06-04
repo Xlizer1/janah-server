@@ -16,6 +16,10 @@ const {
   updateStockSchema,
   searchProductsSchema,
 } = require("./validation");
+const {
+  uploadMiddlewares,
+  handleMulterError,
+} = require("../../../middleware/multer");
 
 // Public routes (no authentication required)
 
@@ -121,26 +125,30 @@ router.get(
 
 /**
  * @route POST /api/v1/products
- * @desc Create new product
+ * @desc Create new product with optional image upload
  * @access Admin
  */
 router.post(
   "/",
   authenticateToken,
   requireAdmin,
+  uploadMiddlewares.product,
+  handleMulterError,
   validateRequest(createProductSchema),
   asyncHandler(ProductController.createProduct)
 );
 
 /**
  * @route PUT /api/v1/products/:product_id
- * @desc Update product
+ * @desc Update product with optional image upload
  * @access Admin
  */
 router.put(
   "/:product_id",
   authenticateToken,
   requireAdmin,
+  uploadMiddlewares.product,
+  handleMulterError,
   validateRequest(updateProductSchema),
   asyncHandler(ProductController.updateProduct)
 );
