@@ -16,7 +16,10 @@ const {
   changePasswordSchema,
   updateProfileSchema,
 } = require("./validation");
-const { uploadMiddlewares, handleMulterError } = require("../../../middleware/multer");
+const {
+  uploadMiddlewares,
+  handleMulterError,
+} = require("../../../middleware/multer");
 
 // Public routes (no authentication required)
 
@@ -25,11 +28,7 @@ const { uploadMiddlewares, handleMulterError } = require("../../../middleware/mu
  * @desc Register a new user
  * @access Public
  */
-router.post(
-  "/register",
-  validateRequest(registerSchema),
-  asyncHandler(AuthController.register)
-);
+router.post("/register", asyncHandler(AuthController.register));
 
 /**
  * @route POST /api/v1/auth/verify-phone
