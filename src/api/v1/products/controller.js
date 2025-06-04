@@ -335,6 +335,7 @@ class ProductController {
       const productData = {
         ...req.body,
         is_active: true,
+        is_featured: JSON.parse(req.body.is_featured),
       };
 
       // Handle uploaded image
