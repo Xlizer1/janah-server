@@ -34,6 +34,8 @@ class ProductController {
         image_url: product.image_url
           ? FileUploadService.getFileUrl(req, product.image_url)
           : null,
+        image_urls: getProductImageUrls(req, product),
+        total_images: getExistingImageUrls(product).length,
       }));
 
       res.json({
@@ -179,9 +181,6 @@ class ProductController {
     }
   }
 
-  /**
-   * Update getProductById to handle multiple images
-   */
   static async getProductById(req, res) {
     try {
       const { product_id } = req.params;
@@ -331,7 +330,7 @@ class ProductController {
   }
 
   /**
-   * Create new product with multiple image support (Admin only)
+   * Create new product with enhanced error handling (Admin only)
    */
   static async createProduct(req, res) {
     try {
@@ -348,16 +347,25 @@ class ProductController {
       if (req.files && req.files.length > 0) {
         uploadedFiles = req.files;
         imageUrls = req.files.map((file) => file.path);
-
-        // Store as JSON array for multiple images, or use first image for backward compatibility
-        productData.image_url = imageUrls[0]; // Primary image (backward compatibility)
-        productData.image_urls = JSON.stringify(imageUrls); // All images as JSON array
       } else if (req.file) {
         // Handle single file upload (backward compatibility)
         uploadedFiles = [req.file];
         imageUrls = [req.file.path];
-        productData.image_url = req.file.path;
-        productData.image_urls = JSON.stringify([req.file.path]);
+      }
+
+      // Set image fields with enhanced error handling
+      if (imageUrls.length > 0) {
+        productData.image_url = imageUrls[0]; // Primary image (backward compatibility)
+
+        // Safely handle image_urls JSON
+        const sanitizedImageUrls = sanitizeImageUrls(imageUrls);
+        productData.image_urls = sanitizedImageUrls;
+
+        console.log("Storing image URLs:", {
+          primary: productData.image_url,
+          count: imageUrls.length,
+          jsonLength: sanitizedImageUrls ? sanitizedImageUrls.length : 0,
+        });
       }
 
       // Validate category exists if category_id is provided
@@ -372,7 +380,40 @@ class ProductController {
         }
       }
 
-      const product = await ProductModel.createProduct(productData);
+      let product;
+      try {
+        product = await ProductModel.createProduct(productData);
+      } catch (error) {
+        // Handle specific JSON/index errors
+        if (
+          error.message.includes("idx_products_image_urls") ||
+          error.message.includes("Data truncated for functional index")
+        ) {
+          console.warn("JSON index error, retrying without image_urls field");
+
+          // Retry without the image_urls JSON field
+          delete productData.image_urls;
+          product = await ProductModel.createProduct(productData);
+
+          // Try to update the image_urls separately
+          if (imageUrls.length > 1) {
+            try {
+              await ProductModel.updateProduct(product.id, {
+                image_urls: sanitizeImageUrls(imageUrls),
+              });
+              product = await ProductModel.findById(product.id);
+            } catch (updateError) {
+              console.error(
+                "Failed to update image_urls separately:",
+                updateError
+              );
+              // Continue without multiple images support
+            }
+          }
+        } else {
+          throw error;
+        }
+      }
 
       // Convert file paths to URLs for response
       const responseImageUrls = imageUrls.map((imagePath) =>
@@ -405,7 +446,7 @@ class ProductController {
   }
 
   /**
-   * Update product with multiple image support (Admin only)
+   * Update product with enhanced error handling (Admin only)
    */
   static async updateProduct(req, res) {
     try {
@@ -435,7 +476,10 @@ class ProductController {
 
         // Update image fields
         updateData.image_url = newImageUrls[0]; // Primary image
-        updateData.image_urls = JSON.stringify(newImageUrls); // All images
+
+        // Safely handle image_urls JSON
+        const sanitizedImageUrls = sanitizeImageUrls(newImageUrls);
+        updateData.image_urls = sanitizedImageUrls;
 
         // Delete old image files if they exist and are local files
         const oldImageUrls = getExistingImageUrls(existingProduct);
@@ -449,7 +493,7 @@ class ProductController {
         uploadedFiles = [req.file];
         newImageUrls = [req.file.path];
         updateData.image_url = req.file.path;
-        updateData.image_urls = JSON.stringify([req.file.path]);
+        updateData.image_urls = sanitizeImageUrls([req.file.path]);
 
         // Delete old images
         const oldImageUrls = getExistingImageUrls(existingProduct);
@@ -472,10 +516,51 @@ class ProductController {
         }
       }
 
-      const updatedProduct = await ProductModel.updateProduct(
-        product_id,
-        updateData
-      );
+      let updatedProduct;
+      try {
+        updatedProduct = await ProductModel.updateProduct(
+          product_id,
+          updateData
+        );
+      } catch (error) {
+        // Handle specific JSON/index errors
+        if (
+          error.message.includes("idx_products_image_urls") ||
+          error.message.includes("Data truncated for functional index")
+        ) {
+          console.warn(
+            "JSON index error during update, retrying without image_urls field"
+          );
+
+          // Retry without the image_urls JSON field
+          const fallbackUpdateData = { ...updateData };
+          delete fallbackUpdateData.image_urls;
+
+          updatedProduct = await ProductModel.updateProduct(
+            product_id,
+            fallbackUpdateData
+          );
+
+          // Try to update the image_urls separately if we have new images
+          if (newImageUrls.length > 1) {
+            try {
+              await ProductModel.updateImageUrls(
+                product_id,
+                sanitizeImageUrls(newImageUrls)
+              );
+              updatedProduct = await ProductModel.findById(product_id);
+            } catch (updateError) {
+              console.error(
+                "Failed to update image_urls separately:",
+                updateError
+              );
+              // Continue without multiple images support
+            }
+          }
+        } else {
+          throw error;
+        }
+      }
 
       // Convert file paths to URLs for response
       const responseImageUrls = getProductImageUrls(req, updatedProduct);
@@ -627,6 +712,43 @@ class ProductController {
     }
   }
 }
+
+function sanitizeImageUrls(imageUrls) {
+  try {
+    if (!imageUrls || !Array.isArray(imageUrls)) {
+      return null;
+    }
+
+    // Filter out any invalid URLs and limit length
+    const validUrls = imageUrls
+      .filter((url) => url && typeof url === "string" && url.length < 500)
+      .slice(0, 10); // Limit to 10 images max
+
+    if (validUrls.length === 0) {
+      return null;
+    }
+
+    // Create a compact JSON string
+    const jsonString = JSON.stringify(validUrls);
+
+    // Check if JSON string is too long (MySQL has limits)
+    if (jsonString.length > 65000) {
+      // Conservative limit for TEXT fields
+      console.warn("Image URLs JSON too long, truncating...");
+      const truncatedUrls = validUrls.slice(
+        0,
+        Math.floor(validUrls.length / 2)
+      );
+      return JSON.stringify(truncatedUrls);
+    }
+
+    return jsonString;
+  } catch (error) {
+    console.error("Error sanitizing image URLs:", error);
+    return null;
+  }
+}
+
 function getExistingImageUrls(product) {
   const imageUrls = [];
 
@@ -638,6 +760,7 @@ function getExistingImageUrls(product) {
         imageUrls.push(...parsed);
       }
     } catch (e) {
+      console.warn("Failed to parse image_urls JSON:", e);
       // Fallback to single image_url if JSON parsing fails
       if (product.image_url) {
         imageUrls.push(product.image_url);
