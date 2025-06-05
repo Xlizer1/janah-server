@@ -465,7 +465,11 @@ class ProductController {
         throw new NotFoundError("Product not found");
       }
 
-      const updateData = { ...req.body };
+      const updateData = {
+        ...req.body,
+        is_active: JSON.parse(req.body.is_active),
+        is_featured: JSON.parse(req.body.is_featured),
+      };
       let newImageUrls = [];
       let uploadedFiles = [];
 
@@ -561,7 +565,6 @@ class ProductController {
           throw error;
         }
       }
-
       // Convert file paths to URLs for response
       const responseImageUrls = getProductImageUrls(req, updatedProduct);
       updatedProduct.image_urls = responseImageUrls;

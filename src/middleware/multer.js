@@ -128,7 +128,7 @@ class FileUploadService {
         files: maxFiles,
         fieldSize: 1024 * 1024, // 1MB for form fields
         fieldNameSize: 100,
-        fields: 10,
+        fields: 20,
       },
       fileFilter: this.imageFileFilter.bind(this),
     };

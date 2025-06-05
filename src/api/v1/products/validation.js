@@ -57,6 +57,7 @@ const createProductSchema = Joi.object({
 });
 
 const updateProductSchema = Joi.object({
+  product_id: Joi.number().required(),
   name: Joi.string().min(2).max(255).optional(),
   code: Joi.string()
     .min(1)
