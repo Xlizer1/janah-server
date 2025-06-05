@@ -125,14 +125,14 @@ router.get(
 
 /**
  * @route POST /api/v1/products
- * @desc Create new product with optional image upload
+ * @desc Create new product with multiple image upload support
  * @access Admin
  */
 router.post(
   "/",
   authenticateToken,
   requireAdmin,
-  uploadMiddlewares.product,
+  uploadMiddlewares.productGallery, // Changed from 'product' to 'productGallery' for multiple images
   handleMulterError,
   validateRequest(createProductSchema),
   asyncHandler(ProductController.createProduct)
@@ -140,14 +140,14 @@ router.post(
 
 /**
  * @route PUT /api/v1/products/:product_id
- * @desc Update product with optional image upload
+ * @desc Update product with multiple image upload support
  * @access Admin
  */
 router.put(
   "/:product_id",
   authenticateToken,
   requireAdmin,
-  uploadMiddlewares.product,
+  uploadMiddlewares.productGallery, // Changed from 'product' to 'productGallery' for multiple images
   handleMulterError,
   validateRequest(updateProductSchema),
   asyncHandler(ProductController.updateProduct)
