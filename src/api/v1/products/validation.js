@@ -80,6 +80,44 @@ const updateProductSchema = Joi.object({
   is_featured: Joi.boolean().optional(),
   is_active: Joi.boolean().optional(),
   image_url: Joi.string().uri().max(500).allow(null).optional(),
+  existing_images: Joi.string()
+    .optional()
+    .custom((value, helpers) => {
+      try {
+        // Validate that it's valid JSON
+        const parsed = JSON.parse(value);
+
+        // Must be an array
+        if (!Array.isArray(parsed)) {
+          return helpers.error("any.invalid");
+        }
+
+        // Each item should be a string (URL or path)
+        if (!parsed.every((item) => typeof item === "string")) {
+          return helpers.error("any.invalid");
+        }
+
+        // Limit array size to prevent abuse
+        if (parsed.length > 20) {
+          return helpers.error("array.max");
+        }
+
+        // Each URL/path should not be too long
+        if (parsed.some((item) => item.length > 500)) {
+          return helpers.error("string.max");
+        }
+
+        return value; // Return original JSON string if valid
+      } catch (error) {
+        return helpers.error("string.base");
+      }
+    })
+    .messages({
+      "any.invalid": "existing_images must be a JSON array of strings",
+      "array.max": "Cannot keep more than 20 existing images",
+      "string.max": "Image URL/path too long",
+      "string.base": "existing_images must be valid JSON",
+    }),
 });
 
 const updateStockSchema = Joi.object({

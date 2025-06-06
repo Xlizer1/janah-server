@@ -446,7 +446,7 @@ class ProductController {
   }
 
   /**
-   * Update product with enhanced error handling (Admin only)
+   * MAIN UPDATE FUNCTION - Fixed for Frontend Integration
    */
   static async updateProduct(req, res) {
     try {
@@ -454,13 +454,11 @@ class ProductController {
 
       const existingProduct = await ProductModel.findById(product_id);
       if (!existingProduct) {
-        // Delete uploaded files if product doesn't exist
-        if (req.files && req.files.length > 0) {
+        const uploadedFiles = req.files || [req.file].filter(Boolean);
+        if (uploadedFiles.length > 0) {
           await Promise.all(
-            req.files.map((file) => FileUploadService.deleteFile(file.path))
+            uploadedFiles.map((file) => FileUploadService.deleteFile(file.path))
           );
-        } else if (req.file) {
-          await FileUploadService.deleteFile(req.file.path);
         }
         throw new NotFoundError("Product not found");
       }
@@ -470,49 +468,53 @@ class ProductController {
         is_active: JSON.parse(req.body.is_active),
         is_featured: JSON.parse(req.body.is_featured),
       };
-      let newImageUrls = [];
-      let uploadedFiles = [];
 
-      // Handle multiple uploaded images
-      if (req.files && req.files.length > 0) {
-        uploadedFiles = req.files;
-        newImageUrls = req.files.map((file) => file.path);
+      // Get current state
+      const currentImageUrls = getExistingImageUrls(existingProduct);
+      const newUploadedFiles = getNewUploadPaths(req);
 
-        // Update image fields
-        updateData.image_url = newImageUrls[0]; // Primary image
+      console.log("=== FRONTEND-BACKEND IMAGE SYNC ===");
+      console.log("Current images in DB:", currentImageUrls);
+      console.log("New uploaded files:", newUploadedFiles);
+      console.log("existing_images from frontend:", req.body.existing_images);
 
-        // Safely handle image_urls JSON
-        const sanitizedImageUrls = sanitizeImageUrls(newImageUrls);
-        updateData.image_urls = sanitizedImageUrls;
+      // Detect intentions using frontend-aware logic
+      const intentions = detectFrontendImageIntentions(req, currentImageUrls);
+      console.log("Detection result:", intentions);
 
-        // Delete old image files if they exist and are local files
-        const oldImageUrls = getExistingImageUrls(existingProduct);
-        await Promise.all(
-          oldImageUrls
-            .filter((url) => url && !url.startsWith("http"))
-            .map((url) => FileUploadService.deleteFile(url))
-        );
-      } else if (req.file) {
-        // Handle single file upload (backward compatibility)
-        uploadedFiles = [req.file];
-        newImageUrls = [req.file.path];
-        updateData.image_url = req.file.path;
-        updateData.image_urls = sanitizeImageUrls([req.file.path]);
+      const imagesToKeep = intentions.keepExistingImages;
+      const imagesToRemove = intentions.imagesToRemove;
 
-        // Delete old images
-        const oldImageUrls = getExistingImageUrls(existingProduct);
-        await Promise.all(
-          oldImageUrls
-            .filter((url) => url && !url.startsWith("http"))
-            .map((url) => FileUploadService.deleteFile(url))
-        );
+      console.log("Final decision:");
+      console.log("  - Keep existing:", imagesToKeep);
+      console.log("  - Remove existing:", imagesToRemove);
+      console.log("  - Add new:", newUploadedFiles);
+      console.log("  - Strategy:", intentions.strategy);
+
+      // Build final image list: kept existing + new uploads
+      const finalImageUrls = [...imagesToKeep, ...newUploadedFiles];
+
+      // Only update image fields if there are actual changes
+      if (imagesToRemove.length > 0 || newUploadedFiles.length > 0) {
+        updateData.image_url = finalImageUrls[0] || null;
+        updateData.image_urls = sanitizeImageUrls(finalImageUrls);
+
+        // Delete removed images (only local files)
+        if (imagesToRemove.length > 0) {
+          console.log("Deleting removed images:", imagesToRemove);
+          await Promise.all(
+            imagesToRemove
+              .filter((url) => url && !url.startsWith("http"))
+              .map((url) => FileUploadService.deleteFile(url))
+          );
+        }
       }
 
-      // Validate category exists if category_id is being updated
+      // Validate category if being updated
       if (updateData.category_id) {
         const category = await CategoryModel.findById(updateData.category_id);
         if (!category) {
-          // Delete uploaded files if validation fails
+          const uploadedFiles = req.files || [req.file].filter(Boolean);
           await Promise.all(
             uploadedFiles.map((file) => FileUploadService.deleteFile(file.path))
           );
@@ -520,6 +522,7 @@ class ProductController {
         }
       }
 
+      // Update the product
       let updatedProduct;
       try {
         updatedProduct = await ProductModel.updateProduct(
@@ -527,17 +530,14 @@ class ProductController {
           updateData
         );
       } catch (error) {
-        // Handle specific JSON/index errors
         if (
           error.message.includes("idx_products_image_urls") ||
           error.message.includes("Data truncated for functional index")
         ) {
-          console.warn(
-            "JSON index error during update, retrying without image_urls field"
-          );
+          console.warn("JSON index error, retrying without image_urls field");
 
-          // Retry without the image_urls JSON field
           const fallbackUpdateData = { ...updateData };
+          const imageUrls = fallbackUpdateData.image_urls;
           delete fallbackUpdateData.image_urls;
 
           updatedProduct = await ProductModel.updateProduct(
@@ -545,47 +545,65 @@ class ProductController {
             fallbackUpdateData
           );
 
-          // Try to update the image_urls separately if we have new images
-          if (newImageUrls.length > 1) {
+          if (imageUrls) {
             try {
-              await ProductModel.updateImageUrls(
-                product_id,
-                sanitizeImageUrls(newImageUrls)
-              );
+              await ProductModel.updateImageUrls(product_id, imageUrls);
               updatedProduct = await ProductModel.findById(product_id);
             } catch (updateError) {
               console.error(
                 "Failed to update image_urls separately:",
                 updateError
               );
-              // Continue without multiple images support
             }
           }
         } else {
           throw error;
         }
       }
-      // Convert file paths to URLs for response
+
+      // Prepare response
       const responseImageUrls = getProductImageUrls(req, updatedProduct);
       updatedProduct.image_urls = responseImageUrls;
       updatedProduct.total_images = responseImageUrls.length;
       updatedProduct.image_url = responseImageUrls[0] || null;
 
+      // Create status message
+      let statusParts = [];
+      if (newUploadedFiles.length > 0)
+        statusParts.push(`${newUploadedFiles.length} added`);
+      if (imagesToRemove.length > 0)
+        statusParts.push(`${imagesToRemove.length} removed`);
+      if (imagesToKeep.length > 0)
+        statusParts.push(`${imagesToKeep.length} kept`);
+
+      const imageStatus =
+        statusParts.length > 0 ? ` (images: ${statusParts.join(", ")})` : "";
+      const message = `Product updated successfully${imageStatus}`;
+
       res.json({
         status: true,
-        message: `Product updated successfully${
-          newImageUrls.length > 0 ? ` with ${newImageUrls.length} images` : ""
-        }`,
-        data: { product: updatedProduct },
+        message,
+        data: {
+          product: updatedProduct,
+          image_analysis: {
+            detection_mode: intentions.mode,
+            strategy_used: intentions.strategy,
+            confidence: intentions.confidence,
+            changes: {
+              added: newUploadedFiles.length,
+              removed: imagesToRemove.length,
+              kept: imagesToKeep.length,
+              total_final: finalImageUrls.length,
+            },
+          },
+        },
       });
     } catch (error) {
-      // Delete uploaded files if error occurs
-      if (req.files && req.files.length > 0) {
+      const uploadedFiles = req.files || [req.file].filter(Boolean);
+      if (uploadedFiles.length > 0) {
         await Promise.all(
-          req.files.map((file) => FileUploadService.deleteFile(file.path))
+          uploadedFiles.map((file) => FileUploadService.deleteFile(file.path))
         );
-      } else if (req.file) {
-        await FileUploadService.deleteFile(req.file.path);
       }
       throw error;
     }
@@ -714,6 +732,116 @@ class ProductController {
       throw error;
     }
   }
+}
+
+/**
+ * Normalize image path for comparison - handles URL vs path differences
+ */
+function normalizeImagePath(imagePath) {
+  if (!imagePath) return "";
+
+  // If it's a full URL, extract the path part after domain
+  if (imagePath.startsWith("http")) {
+    try {
+      const url = new URL(imagePath);
+      // Extract path and remove leading /uploads/ if present
+      return url.pathname.replace(/^\/uploads\//, "").replace(/^\//, "");
+    } catch (e) {
+      return imagePath;
+    }
+  }
+
+  // If it's already a relative path, normalize it
+  return imagePath.replace(/^\/+/, "").replace(/^uploads\//, "");
+}
+
+/**
+ * Detect image intentions from frontend data
+ */
+function detectFrontendImageIntentions(req, currentImageUrls) {
+  const newUploadedFiles = getNewUploadPaths(req);
+
+  const intentions = {
+    keepExistingImages: [],
+    imagesToRemove: [],
+    mode: "unknown",
+    confidence: "high",
+    strategy: "frontend_detection",
+  };
+
+  console.log("=== FRONTEND IMAGE DETECTION ===");
+  console.log("New uploads:", newUploadedFiles.length);
+  console.log("Request body keys:", Object.keys(req.body));
+
+  // Check if frontend sent explicit list of existing images to keep
+  if (req.body.existing_images) {
+    try {
+      const existingImagesToKeep = JSON.parse(req.body.existing_images);
+      console.log(
+        "Frontend sent existing_images to keep:",
+        existingImagesToKeep
+      );
+
+      // Normalize paths for comparison
+      intentions.keepExistingImages = currentImageUrls.filter((currentUrl) => {
+        const normalizedCurrent = normalizeImagePath(currentUrl);
+        return existingImagesToKeep.some((keepUrl) => {
+          const normalizedKeep = normalizeImagePath(keepUrl);
+          return normalizedCurrent === normalizedKeep;
+        });
+      });
+
+      intentions.imagesToRemove = currentImageUrls.filter((currentUrl) => {
+        const normalizedCurrent = normalizeImagePath(currentUrl);
+        return !existingImagesToKeep.some((keepUrl) => {
+          const normalizedKeep = normalizeImagePath(keepUrl);
+          return normalizedCurrent === normalizedKeep;
+        });
+      });
+
+      intentions.mode = "frontend_explicit_list";
+      intentions.strategy = "frontend_existing_images_field";
+    } catch (e) {
+      console.warn("Could not parse existing_images field:", e);
+      // Fallback to append mode
+      intentions.keepExistingImages = [...currentImageUrls];
+      intentions.imagesToRemove = [];
+      intentions.mode = "frontend_append_fallback";
+      intentions.strategy = "frontend_parse_error_fallback";
+    }
+  }
+  // No explicit existing_images field
+  else if (newUploadedFiles.length > 0) {
+    // Frontend uploaded new images but didn't specify which existing ones to keep
+    // Default to append mode (keep all existing + add new)
+    intentions.keepExistingImages = [...currentImageUrls];
+    intentions.imagesToRemove = [];
+    intentions.mode = "frontend_append_mode";
+    intentions.strategy = "frontend_no_explicit_list_append";
+
+    console.log("No existing_images field found, defaulting to append mode");
+  } else {
+    // No new uploads, keep everything
+    intentions.keepExistingImages = [...currentImageUrls];
+    intentions.imagesToRemove = [];
+    intentions.mode = "frontend_keep_all";
+    intentions.strategy = "frontend_no_changes";
+  }
+
+  return intentions;
+}
+
+/**
+ * Get paths of newly uploaded files
+ */
+function getNewUploadPaths(req) {
+  let newUploads = [];
+  if (req.files && req.files.length > 0) {
+    newUploads = req.files.map((file) => file.path);
+  } else if (req.file) {
+    newUploads = [req.file.path];
+  }
+  return newUploads;
 }
 
 function sanitizeImageUrls(imageUrls) {
