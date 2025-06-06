@@ -463,8 +463,10 @@ class ProductController {
         throw new NotFoundError("Product not found");
       }
 
+      const { existing_images, ...bodyWithoutImageFields } = req.body;
+
       const updateData = {
-        ...req.body,
+        ...bodyWithoutImageFields,
         is_active: JSON.parse(req.body.is_active),
         is_featured: JSON.parse(req.body.is_featured),
       };
