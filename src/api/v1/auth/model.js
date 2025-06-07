@@ -35,9 +35,9 @@ class UserModel {
     try {
       const sql = `
         SELECT id, phone_number, first_name, last_name, email, 
-               is_active, role, profile_picture,
-               activation_code_used, activation_method,
-               created_at, updated_at, activated_at
+              is_active, role, profile_picture,
+              activation_code_used, activation_method, activated_by,
+              created_at, updated_at, activated_at
         FROM users 
         WHERE id = ?
       `;
@@ -60,9 +60,9 @@ class UserModel {
     try {
       const sql = `
         SELECT id, phone_number, password, first_name, last_name, email, 
-               is_active, role, profile_picture,
-               activation_code_used, activation_method,
-               created_at, updated_at, activated_at
+              is_active, role, profile_picture,
+              activation_code_used, activation_method, activated_by,
+              created_at, updated_at, activated_at
         FROM users 
         WHERE phone_number = ?
       `;
@@ -89,9 +89,9 @@ class UserModel {
     try {
       const sql = `
         SELECT id, phone_number, first_name, last_name, email, 
-               is_active, role, profile_picture,
-               activation_code_used, activation_method,
-               created_at, updated_at, activated_at
+              is_active, role, profile_picture,
+              activation_code_used, activation_method, activated_by,
+              created_at, updated_at, activated_at
         FROM users 
         WHERE email = ?
       `;
@@ -240,9 +240,9 @@ class UserModel {
       // Get users (UPDATED - no is_phone_verified)
       const sql = `
         SELECT id, phone_number, first_name, last_name, email, 
-               is_active, role, profile_picture,
-               activation_code_used, activation_method,
-               created_at, updated_at, activated_at
+              is_active, role, profile_picture,
+              activation_code_used, activation_method, activated_by,
+              created_at, updated_at, activated_at
         FROM users 
         ${whereClause}
         ORDER BY created_at DESC
