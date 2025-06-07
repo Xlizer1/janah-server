@@ -27,19 +27,20 @@ class UserModel {
   }
 
   /**
-   * Find user by ID
+   * Find user by ID (UPDATED - no is_phone_verified)
    * @param {number} id - User ID
    * @returns {Promise<Object|null>} User object or null
    */
   static async findById(id) {
     try {
       const sql = `
-                SELECT id, phone_number, first_name, last_name, email, 
-                       is_phone_verified, is_active, role, profile_picture,
-                       created_at, updated_at, activated_at
-                FROM users 
-                WHERE id = ?
-            `;
+        SELECT id, phone_number, first_name, last_name, email, 
+               is_active, role, profile_picture,
+               activation_code_used, activation_method,
+               created_at, updated_at, activated_at
+        FROM users 
+        WHERE id = ?
+      `;
       const result = await executeQuery(sql, [id], "Find User By ID");
       return result.length > 0 ? result[0] : null;
     } catch (error) {
@@ -51,19 +52,20 @@ class UserModel {
   }
 
   /**
-   * Find user by phone number
+   * Find user by phone number (UPDATED - no is_phone_verified)
    * @param {string} phoneNumber - Phone number
    * @returns {Promise<Object|null>} User object or null
    */
   static async findByPhoneNumber(phoneNumber) {
     try {
       const sql = `
-                SELECT id, phone_number, password, first_name, last_name, email, 
-                       is_phone_verified, is_active, role, profile_picture,
-                       created_at, updated_at, activated_at
-                FROM users 
-                WHERE phone_number = ?
-            `;
+        SELECT id, phone_number, password, first_name, last_name, email, 
+               is_active, role, profile_picture,
+               activation_code_used, activation_method,
+               created_at, updated_at, activated_at
+        FROM users 
+        WHERE phone_number = ?
+      `;
       const result = await executeQuery(
         sql,
         [phoneNumber],
@@ -79,19 +81,20 @@ class UserModel {
   }
 
   /**
-   * Find user by email
+   * Find user by email (UPDATED - no is_phone_verified)
    * @param {string} email - Email address
    * @returns {Promise<Object|null>} User object or null
    */
   static async findByEmail(email) {
     try {
       const sql = `
-                SELECT id, phone_number, first_name, last_name, email, 
-                       is_phone_verified, is_active, role, profile_picture,
-                       created_at, updated_at, activated_at
-                FROM users 
-                WHERE email = ?
-            `;
+        SELECT id, phone_number, first_name, last_name, email, 
+               is_active, role, profile_picture,
+               activation_code_used, activation_method,
+               created_at, updated_at, activated_at
+        FROM users 
+        WHERE email = ?
+      `;
       const result = await executeQuery(sql, [email], "Find User By Email");
       return result.length > 0 ? result[0] : null;
     } catch (error) {
@@ -119,182 +122,6 @@ class UserModel {
   }
 
   /**
-   * Activate user account
-   * @param {number} userId - User ID to activate
-   * @param {number} adminId - Admin ID who is activating
-   * @returns {Promise<Object>} Updated user
-   */
-  static async activateUser(userId, adminId) {
-    try {
-      const updateData = {
-        is_active: true,
-        activated_at: new Date(),
-        activated_by: adminId,
-      };
-      return await this.updateUser(userId, updateData);
-    } catch (error) {
-      throw new DatabaseError(`Error activating user: ${error.message}`, error);
-    }
-  }
-
-  /**
-   * Deactivate user account
-   * @param {number} userId - User ID to deactivate
-   * @returns {Promise<Object>} Updated user
-   */
-  static async deactivateUser(userId) {
-    try {
-      const updateData = {
-        is_active: false,
-        activated_at: null,
-        activated_by: null,
-      };
-      return await this.updateUser(userId, updateData);
-    } catch (error) {
-      throw new DatabaseError(
-        `Error deactivating user: ${error.message}`,
-        error
-      );
-    }
-  }
-
-  /**
-   * Verify user's phone number
-   * @param {number} userId - User ID
-   * @returns {Promise<Object>} Updated user
-   */
-  static async verifyPhoneNumber(userId) {
-    try {
-      const updateData = { is_phone_verified: true };
-      return await this.updateUser(userId, updateData);
-    } catch (error) {
-      throw new DatabaseError(`Error verifying phone: ${error.message}`, error);
-    }
-  }
-
-  /**
-   * Update user password
-   * @param {number} userId - User ID
-   * @param {string} hashedPassword - New hashed password
-   * @returns {Promise<Object>} Updated user
-   */
-  static async updatePassword(userId, hashedPassword) {
-    try {
-      const updateData = { password: hashedPassword };
-      return await this.updateUser(userId, updateData);
-    } catch (error) {
-      throw new DatabaseError(
-        `Error updating password: ${error.message}`,
-        error
-      );
-    }
-  }
-
-  /**
-   * Update user profile picture
-   * @param {number} userId - User ID
-   * @param {string} profilePicturePath - Profile picture file path
-   * @returns {Promise<Object>} Updated user
-   */
-  static async updateProfilePicture(userId, profilePicturePath) {
-    try {
-      const updateData = { profile_picture: profilePicturePath };
-      return await this.updateUser(userId, updateData);
-    } catch (error) {
-      throw new DatabaseError(
-        `Error updating profile picture: ${error.message}`,
-        error
-      );
-    }
-  }
-
-  /**
-   * Remove user profile picture
-   * @param {number} userId - User ID
-   * @returns {Promise<Object>} Updated user
-   */
-  static async removeProfilePicture(userId) {
-    try {
-      const updateData = { profile_picture: null };
-      return await this.updateUser(userId, updateData);
-    } catch (error) {
-      throw new DatabaseError(
-        `Error removing profile picture: ${error.message}`,
-        error
-      );
-    }
-  }
-
-  /**
-   * Get all users with pagination and filters
-   * @param {Object} options - Query options
-   * @returns {Promise<Object>} Users list with pagination info
-   */
-  static async getAllUsers(options = {}) {
-    try {
-      const { page = 1, limit = 10, role, isActive, isPhoneVerified } = options;
-      const offset = (page - 1) * limit;
-
-      let whereConditions = [];
-      let params = [];
-
-      if (role) {
-        whereConditions.push("role = ?");
-        params.push(role);
-      }
-
-      if (isActive !== undefined) {
-        whereConditions.push("is_active = ?");
-        params.push(isActive);
-      }
-
-      if (isPhoneVerified !== undefined) {
-        whereConditions.push("is_phone_verified = ?");
-        params.push(isPhoneVerified);
-      }
-
-      const whereClause =
-        whereConditions.length > 0
-          ? `WHERE ${whereConditions.join(" AND ")}`
-          : "";
-
-      // Get total count
-      const countSql = `SELECT COUNT(*) as total FROM users ${whereClause}`;
-      const countResult = await executeQuery(countSql, params, "Count Users");
-      const total = countResult[0].total;
-
-      // Get users
-      const sql = `
-        SELECT id, phone_number, first_name, last_name, email, 
-                is_phone_verified, is_active, role, profile_picture,
-                created_at, updated_at, activated_at
-        FROM users 
-        ${whereClause}
-        ORDER BY created_at DESC
-        LIMIT ? OFFSET ?
-    `;
-
-      const users = await executeQuery(
-        sql,
-        [...params, limit, offset],
-        "Get All Users"
-      );
-
-      return {
-        users,
-        pagination: {
-          page,
-          limit,
-          total,
-          totalPages: Math.ceil(total / limit),
-        },
-      };
-    } catch (error) {
-      throw new DatabaseError(`Error getting users: ${error.message}`, error);
-    }
-  }
-
-  /**
    * Activate user with activation code
    * @param {number} userId - User ID
    * @param {string} activationCode - Activation code used
@@ -318,30 +145,127 @@ class UserModel {
   }
 
   /**
-   * Find user by phone number (UPDATED - removed phone verification logic)
-   * @param {string} phoneNumber - Phone number
-   * @returns {Promise<Object|null>} User object or null
+   * Activate user directly (by admin)
+   * @param {number} userId - User ID to activate
+   * @param {number} adminId - Admin ID who is activating
+   * @returns {Promise<Object>} Updated user
    */
-  static async findByPhoneNumber(phoneNumber) {
+  static async activateUserDirectly(userId, adminId) {
     try {
-      const sql = `
-      SELECT id, phone_number, password, first_name, last_name, email, 
-             is_active, role, profile_picture, activation_code_used, activation_method,
-             created_at, updated_at, activated_at
-      FROM users 
-      WHERE phone_number = ?
-    `;
-      const result = await executeQuery(
-        sql,
-        [phoneNumber],
-        "Find User By Phone"
-      );
-      return result.length > 0 ? result[0] : null;
+      const updateData = {
+        is_active: true,
+        activated_at: new Date(),
+        activated_by: adminId,
+        activation_method: "admin_direct",
+      };
+      return await this.updateUser(userId, updateData);
+    } catch (error) {
+      throw new DatabaseError(`Error activating user: ${error.message}`, error);
+    }
+  }
+
+  /**
+   * Deactivate user account
+   * @param {number} userId - User ID to deactivate
+   * @returns {Promise<Object>} Updated user
+   */
+  static async deactivateUser(userId) {
+    try {
+      const updateData = {
+        is_active: false,
+        activated_at: null,
+        activated_by: null,
+        activation_method: null,
+      };
+      return await this.updateUser(userId, updateData);
     } catch (error) {
       throw new DatabaseError(
-        `Error finding user by phone: ${error.message}`,
+        `Error deactivating user: ${error.message}`,
         error
       );
+    }
+  }
+
+  /**
+   * Update user password
+   * @param {number} userId - User ID
+   * @param {string} hashedPassword - New hashed password
+   * @returns {Promise<Object>} Updated user
+   */
+  static async updatePassword(userId, hashedPassword) {
+    try {
+      const updateData = { password: hashedPassword };
+      return await this.updateUser(userId, updateData);
+    } catch (error) {
+      throw new DatabaseError(
+        `Error updating password: ${error.message}`,
+        error
+      );
+    }
+  }
+
+  /**
+   * Get all users with pagination and filters (UPDATED - no is_phone_verified)
+   * @param {Object} options - Query options
+   * @returns {Promise<Object>} Users list with pagination info
+   */
+  static async getAllUsers(options = {}) {
+    try {
+      const { page = 1, limit = 10, role, isActive } = options;
+      const offset = (page - 1) * limit;
+
+      let whereConditions = [];
+      let params = [];
+
+      if (role) {
+        whereConditions.push("role = ?");
+        params.push(role);
+      }
+
+      if (isActive !== undefined) {
+        whereConditions.push("is_active = ?");
+        params.push(isActive);
+      }
+
+      const whereClause =
+        whereConditions.length > 0
+          ? `WHERE ${whereConditions.join(" AND ")}`
+          : "";
+
+      // Get total count
+      const countSql = `SELECT COUNT(*) as total FROM users ${whereClause}`;
+      const countResult = await executeQuery(countSql, params, "Count Users");
+      const total = countResult[0].total;
+
+      // Get users (UPDATED - no is_phone_verified)
+      const sql = `
+        SELECT id, phone_number, first_name, last_name, email, 
+               is_active, role, profile_picture,
+               activation_code_used, activation_method,
+               created_at, updated_at, activated_at
+        FROM users 
+        ${whereClause}
+        ORDER BY created_at DESC
+        LIMIT ? OFFSET ?
+      `;
+
+      const users = await executeQuery(
+        sql,
+        [...params, limit, offset],
+        "Get All Users"
+      );
+
+      return {
+        users,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+        },
+      };
+    } catch (error) {
+      throw new DatabaseError(`Error getting users: ${error.message}`, error);
     }
   }
 }

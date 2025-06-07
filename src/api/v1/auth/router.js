@@ -53,12 +53,6 @@ router.post(
   asyncHandler(AuthController.login)
 );
 
-// REMOVED ROUTES:
-// - /verify-phone
-// - /resend-code
-// - /forgot-password (can be added back if needed without SMS)
-// - /reset-password
-
 // Protected routes (authentication required)
 
 /**
@@ -84,6 +78,30 @@ router.put(
   handleMulterError,
   validateRequest(updateProfileSchema),
   asyncHandler(AuthController.updateProfile)
+);
+
+/**
+ * @route POST /api/v1/auth/profile/picture
+ * @desc Upload/Update profile picture
+ * @access Private
+ */
+router.post(
+  "/profile/picture",
+  authenticateToken,
+  uploadMiddlewares.user,
+  handleMulterError,
+  asyncHandler(AuthController.updateProfilePicture)
+);
+
+/**
+ * @route DELETE /api/v1/auth/profile/picture
+ * @desc Remove profile picture
+ * @access Private
+ */
+router.delete(
+  "/profile/picture",
+  authenticateToken,
+  asyncHandler(AuthController.removeProfilePicture)
 );
 
 /**

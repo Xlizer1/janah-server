@@ -1,14 +1,17 @@
 const Joi = require("joi");
 
-// Registration validation schema (REMOVED PHONE VERIFICATION)
+// Custom phone number validation
+const phoneNumberValidation = Joi.string()
+  .pattern(/^\+?[1-9]\d{1,14}$/)
+  .required()
+  .messages({
+    "string.pattern.base": "Please provide a valid phone number",
+    "any.required": "Phone number is required",
+  });
+
+// Registration validation schema (REMOVED confirm_password for simplicity)
 const registerSchema = Joi.object({
-  phone_number: Joi.string()
-    .pattern(/^\+?[1-9]\d{1,14}$/)
-    .required()
-    .messages({
-      "string.pattern.base": "Please provide a valid phone number",
-      "any.required": "Phone number is required",
-    }),
+  phone_number: phoneNumberValidation,
   password: Joi.string().min(6).max(50).required().messages({
     "string.min": "Password must be at least 6 characters long",
     "string.max": "Password cannot exceed 50 characters",
@@ -36,15 +39,17 @@ const registerSchema = Joi.object({
   }),
 });
 
+// Login validation schema (SIMPLIFIED)
+const loginSchema = Joi.object({
+  phone_number: phoneNumberValidation,
+  password: Joi.string().required().messages({
+    "any.required": "Password is required",
+  }),
+});
+
 // Account activation schema
 const activateAccountSchema = Joi.object({
-  phone_number: Joi.string()
-    .pattern(/^\+?[1-9]\d{1,14}$/)
-    .required()
-    .messages({
-      "string.pattern.base": "Please provide a valid phone number",
-      "any.required": "Phone number is required",
-    }),
+  phone_number: phoneNumberValidation,
   activation_code: Joi.string()
     .min(3)
     .max(50)
@@ -56,20 +61,6 @@ const activateAccountSchema = Joi.object({
       "string.pattern.base": "Invalid activation code format",
       "any.required": "Activation code is required",
     }),
-});
-
-// Login validation schema (SIMPLIFIED)
-const loginSchema = Joi.object({
-  phone_number: Joi.string()
-    .pattern(/^\+?[1-9]\d{1,14}$/)
-    .required()
-    .messages({
-      "string.pattern.base": "Please provide a valid phone number",
-      "any.required": "Phone number is required",
-    }),
-  password: Joi.string().required().messages({
-    "any.required": "Password is required",
-  }),
 });
 
 // Generate activation code schema
@@ -162,12 +153,43 @@ const updateProfileSchema = Joi.object({
   }),
 });
 
+// Admin activation schema
+const activateUserSchema = Joi.object({
+  user_id: Joi.number().integer().positive().required().messages({
+    "number.base": "User ID must be a number",
+    "number.integer": "User ID must be an integer",
+    "number.positive": "User ID must be positive",
+    "any.required": "User ID is required",
+  }),
+});
+
+// Get users schema (for admin) - UPDATED
+const getUsersSchema = Joi.object({
+  page: Joi.number().integer().min(1).default(1).messages({
+    "number.base": "Page must be a number",
+    "number.integer": "Page must be an integer",
+    "number.min": "Page must be at least 1",
+  }),
+  limit: Joi.number().integer().min(1).max(100).default(10).messages({
+    "number.base": "Limit must be a number",
+    "number.integer": "Limit must be an integer",
+    "number.min": "Limit must be at least 1",
+    "number.max": "Limit cannot exceed 100",
+  }),
+  role: Joi.string().valid("user", "admin").optional().messages({
+    "any.only": "Role must be either user or admin",
+  }),
+  is_active: Joi.boolean().optional(),
+});
+
 module.exports = {
   registerSchema,
-  activateAccountSchema,
   loginSchema,
+  activateAccountSchema,
   generateActivationCodeSchema,
   getActivationCodesSchema,
   changePasswordSchema,
   updateProfileSchema,
+  activateUserSchema,
+  getUsersSchema,
 };

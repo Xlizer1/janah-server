@@ -1,4 +1,8 @@
 const ActivationCodeModel = require("../auth/activationCodeModel");
+const {
+  NotFoundError,
+  BusinessLogicError,
+} = require("../../../middleware/errorHandler");
 
 class AdminActivationController {
   /**
@@ -133,8 +137,4 @@ class AdminActivationController {
   }
 }
 
-module.exports = {
-  AuthController,
-  AdminActivationController,
-  ActivationCodeModel,
-};
+module.exports = AdminActivationController;

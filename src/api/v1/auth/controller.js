@@ -1,11 +1,9 @@
 const UserModel = require("./model");
-const VerificationCodeModel = require("./verificationModel");
-const TwilioService = require("../../../services/twilio");
+const ActivationCodeModel = require("./activationCodeModel");
 const {
   hash,
   verifyPassword,
   createToken,
-  verifyUserToken,
 } = require("../../../helpers/common");
 const {
   ValidationError,
@@ -72,94 +70,49 @@ class AuthController {
   }
 
   /**
-   * Verify phone number
+   * Activate account with activation code
    */
-  static async verifyPhone(req, res) {
+  static async activateAccount(req, res) {
     try {
-      const { phone_number, verification_code } = req.body;
-
-      const formattedPhone = TwilioService.formatPhoneNumber(phone_number);
-
-      // Find valid verification code
-      const verificationRecord = await VerificationCodeModel.findValidCode(
-        formattedPhone,
-        verification_code,
-        "registration"
-      );
-
-      if (!verificationRecord) {
-        throw new ValidationError("Invalid or expired verification code");
-      }
+      const { phone_number, activation_code } = req.body;
 
       // Find user
-      const user = await UserModel.findByPhoneNumber(formattedPhone);
+      const user = await UserModel.findByPhoneNumber(phone_number);
       if (!user) {
         throw new NotFoundError("User not found");
       }
 
-      // Mark verification code as used
-      await VerificationCodeModel.markAsUsed(verificationRecord.id);
+      // Check if already activated
+      if (user.is_active) {
+        throw new BusinessLogicError("Account is already activated");
+      }
 
-      // Update user phone verification status
-      const updatedUser = await UserModel.verifyPhoneNumber(user.id);
+      // Validate activation code
+      const validation = await ActivationCodeModel.validateCode(
+        activation_code
+      );
+      if (!validation.isValid) {
+        throw new ValidationError(validation.message);
+      }
+
+      // Use the activation code
+      await ActivationCodeModel.useCode(activation_code, user.id);
+
+      // Activate user account
+      const updatedUser = await UserModel.activateUserWithCode(
+        user.id,
+        activation_code
+      );
 
       // Remove password from response
       delete updatedUser.password;
 
       res.json({
         status: true,
-        message:
-          "Phone number verified successfully. Your account is pending admin activation.",
+        message: "Account activated successfully! You can now login.",
         data: {
           user: updatedUser,
-          next_step: "wait_for_activation",
-        },
-      });
-    } catch (error) {
-      throw error;
-    }
-  }
-
-  /**
-   * Resend verification code
-   */
-  static async resendVerificationCode(req, res) {
-    try {
-      const { phone_number, type = "registration" } = req.body;
-
-      const formattedPhone = TwilioService.formatPhoneNumber(phone_number);
-
-      // Check rate limit
-      const rateLimit = await VerificationCodeModel.checkRateLimit(
-        formattedPhone,
-        type
-      );
-      if (!rateLimit.canRequest) {
-        throw new BusinessLogicError(
-          `Too many verification attempts. Please try again after ${rateLimit.resetTime.toLocaleTimeString()}`
-        );
-      }
-
-      // Generate new code
-      const verificationCode = TwilioService.generateVerificationCode();
-      await VerificationCodeModel.createVerificationCode(
-        formattedPhone,
-        verificationCode,
-        type
-      );
-
-      // Send SMS
-      await TwilioService.sendVerificationCode(
-        formattedPhone,
-        verificationCode,
-        type
-      );
-
-      res.json({
-        status: true,
-        message: "Verification code sent successfully",
-        data: {
-          attempts_left: rateLimit.attemptsLeft - 1,
+          next_step: "login",
         },
       });
     } catch (error) {
@@ -186,7 +139,7 @@ class AuthController {
         throw new AuthenticationError("Invalid phone number or password");
       }
 
-      // Check if account is active (REMOVED PHONE VERIFICATION CHECK)
+      // Check if account is active (ONLY CHECK is_active)
       if (!user.is_active) {
         throw new AuthenticationError(
           "Your account is not activated. Please contact an administrator to get an activation code."
@@ -217,107 +170,6 @@ class AuthController {
           token,
           token_type: "Bearer",
         },
-      });
-    } catch (error) {
-      throw error;
-    }
-  }
-
-  /**
-   * Forgot password - send reset code
-   */
-  static async forgotPassword(req, res) {
-    try {
-      const { phone_number } = req.body;
-
-      const formattedPhone = TwilioService.formatPhoneNumber(phone_number);
-
-      // Find user
-      const user = await UserModel.findByPhoneNumber(formattedPhone);
-      if (!user) {
-        // Don't reveal that user doesn't exist
-        res.json({
-          status: true,
-          message:
-            "If an account with this phone number exists, a reset code has been sent.",
-        });
-        return;
-      }
-
-      // Check rate limit
-      const rateLimit = await VerificationCodeModel.checkRateLimit(
-        formattedPhone,
-        "password_reset"
-      );
-      if (!rateLimit.canRequest) {
-        throw new BusinessLogicError(
-          `Too many reset attempts. Please try again after ${rateLimit.resetTime.toLocaleTimeString()}`
-        );
-      }
-
-      // Generate reset code
-      const resetCode = TwilioService.generateVerificationCode();
-      await VerificationCodeModel.createVerificationCode(
-        formattedPhone,
-        resetCode,
-        "password_reset"
-      );
-
-      // Send SMS
-      await TwilioService.sendVerificationCode(
-        formattedPhone,
-        resetCode,
-        "password_reset"
-      );
-
-      res.json({
-        status: true,
-        message: "Password reset code sent successfully",
-      });
-    } catch (error) {
-      throw error;
-    }
-  }
-
-  /**
-   * Reset password with verification code
-   */
-  static async resetPassword(req, res) {
-    try {
-      const { phone_number, verification_code, new_password } = req.body;
-
-      const formattedPhone = TwilioService.formatPhoneNumber(phone_number);
-
-      // Find valid reset code
-      const verificationRecord = await VerificationCodeModel.findValidCode(
-        formattedPhone,
-        verification_code,
-        "password_reset"
-      );
-
-      if (!verificationRecord) {
-        throw new ValidationError("Invalid or expired reset code");
-      }
-
-      // Find user
-      const user = await UserModel.findByPhoneNumber(formattedPhone);
-      if (!user) {
-        throw new NotFoundError("User not found");
-      }
-
-      // Hash new password
-      const hashedPassword = await hash(new_password);
-
-      // Mark verification code as used
-      await VerificationCodeModel.markAsUsed(verificationRecord.id);
-
-      // Update password
-      await UserModel.updatePassword(user.id, hashedPassword);
-
-      res.json({
-        status: true,
-        message:
-          "Password reset successful. You can now login with your new password.",
       });
     } catch (error) {
       throw error;
@@ -541,56 +393,6 @@ class AuthController {
         status: true,
         message: "Profile picture removed successfully",
         data: { user: updatedUser },
-      });
-    } catch (error) {
-      throw error;
-    }
-  }
-  /**
-   * Activate account with activation code
-   */
-  static async activateAccount(req, res) {
-    try {
-      const { phone_number, activation_code } = req.body;
-
-      // Find user
-      const user = await UserModel.findByPhoneNumber(phone_number);
-      if (!user) {
-        throw new NotFoundError("User not found");
-      }
-
-      // Check if already activated
-      if (user.is_active) {
-        throw new BusinessLogicError("Account is already activated");
-      }
-
-      // Validate activation code
-      const validation = await ActivationCodeModel.validateCode(
-        activation_code
-      );
-      if (!validation.isValid) {
-        throw new ValidationError(validation.message);
-      }
-
-      // Use the activation code
-      await ActivationCodeModel.useCode(activation_code, user.id);
-
-      // Activate user account
-      const updatedUser = await UserModel.activateUserWithCode(
-        user.id,
-        activation_code
-      );
-
-      // Remove password from response
-      delete updatedUser.password;
-
-      res.json({
-        status: true,
-        message: "Account activated successfully! You can now login.",
-        data: {
-          user: updatedUser,
-          next_step: "login",
-        },
       });
     } catch (error) {
       throw error;
