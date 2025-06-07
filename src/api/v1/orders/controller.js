@@ -9,7 +9,7 @@ const {
 
 class OrderController {
   /**
-   * Create a new order (for authenticated users)
+   * Create a new order (for authenticated users) - Updated with selling price
    */
   static async createOrder(req, res) {
     try {
@@ -25,10 +25,19 @@ class OrderController {
       let totalAmount = 0;
 
       for (const item of items) {
-        const { product_id, quantity } = item;
+        const { product_id, quantity, selling_price } = item;
 
         if (!product_id || !quantity || quantity <= 0) {
           throw new ValidationError("Invalid product or quantity");
+        }
+
+        // Validate selling price if provided
+        if (selling_price !== undefined && selling_price !== null) {
+          if (typeof selling_price !== "number" || selling_price <= 0) {
+            throw new ValidationError(
+              "Selling price must be a positive number"
+            );
+          }
         }
 
         // Get product details
@@ -60,6 +69,7 @@ class OrderController {
           full_code: product.full_code,
           price: product.price,
           quantity: quantity,
+          selling_price: selling_price || null, // Include selling price
         });
       }
 
@@ -75,6 +85,20 @@ class OrderController {
       // Create order
       const order = await OrderModel.createOrder(orderData, orderItems);
 
+      // Calculate profit margins for analytics (optional)
+      const orderAnalytics = order.items.map((item) => ({
+        product_id: item.product_id,
+        purchase_price: item.price,
+        selling_price: item.selling_price,
+        profit_margin: item.selling_price
+          ? (
+              ((item.selling_price - item.price) / item.selling_price) *
+              100
+            ).toFixed(2)
+          : null,
+        quantity: item.quantity,
+      }));
+
       // Send SMS notification to customer
       try {
         await TwilioService.sendSMS(
@@ -83,13 +107,15 @@ class OrderController {
         );
       } catch (smsError) {
         console.error("Failed to send order confirmation SMS:", smsError);
-        // Don't fail the order creation if SMS fails
       }
 
       res.status(201).json({
         status: true,
         message: "Order created successfully",
-        data: { order },
+        data: {
+          order,
+          analytics: orderAnalytics, // Include profit analysis
+        },
       });
     } catch (error) {
       throw error;

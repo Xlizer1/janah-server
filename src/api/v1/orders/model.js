@@ -12,7 +12,7 @@ class OrderModel {
    */
   static ORDER_STATUSES = {
     PENDING: "pending",
-    CONFIRMED: "confirmed", 
+    CONFIRMED: "confirmed",
     PREPARING: "preparing",
     READY_TO_SHIP: "ready_to_ship",
     SHIPPED: "shipped",
@@ -26,43 +26,47 @@ class OrderModel {
   static async createOrder(orderData, orderItems) {
     try {
       const queries = [];
-      
+
       // Generate order number
       const orderNumber = await this.generateOrderNumber();
-      
-      // Calculate total amount
-      const totalAmount = orderItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-      
+
+      // Calculate total amount (using purchase price, not selling price)
+      const totalAmount = orderItems.reduce(
+        (sum, item) => sum + item.price * item.quantity,
+        0
+      );
+
       // Prepare order data
       const finalOrderData = {
         ...orderData,
         order_number: orderNumber,
         total_amount: totalAmount,
-        status: this.ORDER_STATUSES.PENDING
+        status: this.ORDER_STATUSES.PENDING,
       };
-      
+
       // Insert order
       const orderQuery = buildInsertQuery("orders", finalOrderData);
       queries.push(orderQuery);
-      
+
       // Execute transaction
       const results = await executeTransaction(queries, "Create Order");
       const orderId = results[0].insertId;
-      
-      // Insert order items
-      const itemQueries = orderItems.map(item => {
+
+      // Insert order items with selling prices
+      const itemQueries = orderItems.map((item) => {
         const itemData = {
           ...item,
           order_id: orderId,
-          subtotal: item.price * item.quantity
+          subtotal: item.price * item.quantity,
+          selling_price: item.selling_price || null, // Add selling price field
         };
         return buildInsertQuery("order_items", itemData);
       });
-      
+
       if (itemQueries.length > 0) {
         await executeTransaction(itemQueries, "Create Order Items");
       }
-      
+
       // Return complete order
       return await this.findById(orderId);
     } catch (error) {
@@ -77,36 +81,43 @@ class OrderModel {
     try {
       // Get order details
       const orderSql = `
-        SELECT o.*, 
-               u.first_name, u.last_name, u.phone_number as user_phone,
-               ca.first_name as confirmed_admin_name, ca.last_name as confirmed_admin_lastname,
-               sa.first_name as shipped_admin_name, sa.last_name as shipped_admin_lastname,
-               da.first_name as delivered_admin_name, da.last_name as delivered_admin_lastname
-        FROM orders o
-        LEFT JOIN users u ON o.user_id = u.id
-        LEFT JOIN users ca ON o.confirmed_by = ca.id
-        LEFT JOIN users sa ON o.shipped_by = sa.id  
-        LEFT JOIN users da ON o.delivered_by = da.id
-        WHERE o.id = ?
-      `;
-      
-      const orderResult = await executeQuery(orderSql, [id], "Find Order By ID");
+      SELECT o.*, 
+             u.first_name, u.last_name, u.phone_number as user_phone,
+             ca.first_name as confirmed_admin_name, ca.last_name as confirmed_admin_lastname,
+             sa.first_name as shipped_admin_name, sa.last_name as shipped_admin_lastname,
+             da.first_name as delivered_admin_name, da.last_name as delivered_admin_lastname
+      FROM orders o
+      LEFT JOIN users u ON o.user_id = u.id
+      LEFT JOIN users ca ON o.confirmed_by = ca.id
+      LEFT JOIN users sa ON o.shipped_by = sa.id  
+      LEFT JOIN users da ON o.delivered_by = da.id
+      WHERE o.id = ?
+    `;
+
+      const orderResult = await executeQuery(
+        orderSql,
+        [id],
+        "Find Order By ID"
+      );
       if (orderResult.length === 0) return null;
-      
+
       const order = orderResult[0];
-      
-      // Get order items
+
+      // Get order items with selling prices
       const itemsSql = `
-        SELECT oi.*, p.name as current_product_name, p.image_url
-        FROM order_items oi
-        LEFT JOIN products p ON oi.product_id = p.id
-        WHERE oi.order_id = ?
-        ORDER BY oi.id
-      `;
-      
+      SELECT oi.*, 
+             oi.selling_price,
+             p.name as current_product_name, 
+             p.image_url
+      FROM order_items oi
+      LEFT JOIN products p ON oi.product_id = p.id
+      WHERE oi.order_id = ?
+      ORDER BY oi.id
+    `;
+
       const items = await executeQuery(itemsSql, [id], "Find Order Items");
       order.items = items;
-      
+
       return order;
     } catch (error) {
       throw new DatabaseError(`Error finding order: ${error.message}`, error);
@@ -125,12 +136,16 @@ class OrderModel {
         LEFT JOIN users u ON o.user_id = u.id
         WHERE o.order_number = ?
       `;
-      
-      const result = await executeQuery(sql, [orderNumber], "Find Order By Number");
+
+      const result = await executeQuery(
+        sql,
+        [orderNumber],
+        "Find Order By Number"
+      );
       if (result.length === 0) return null;
-      
+
       const order = result[0];
-      
+
       // Get order items
       const itemsSql = `
         SELECT oi.*, p.name as current_product_name, p.image_url
@@ -138,13 +153,20 @@ class OrderModel {
         LEFT JOIN products p ON oi.product_id = p.id
         WHERE oi.order_id = ?
       `;
-      
-      const items = await executeQuery(itemsSql, [order.id], "Find Order Items By Number");
+
+      const items = await executeQuery(
+        itemsSql,
+        [order.id],
+        "Find Order Items By Number"
+      );
       order.items = items;
-      
+
       return order;
     } catch (error) {
-      throw new DatabaseError(`Error finding order by number: ${error.message}`, error);
+      throw new DatabaseError(
+        `Error finding order by number: ${error.message}`,
+        error
+      );
     }
   }
 
@@ -160,7 +182,7 @@ class OrderModel {
         userId,
         startDate,
         endDate,
-        searchTerm
+        searchTerm,
       } = options;
 
       const offset = (page - 1) * limit;
@@ -188,11 +210,16 @@ class OrderModel {
       }
 
       if (searchTerm) {
-        whereConditions.push("(o.order_number LIKE ? OR o.customer_name LIKE ? OR o.customer_phone LIKE ?)");
+        whereConditions.push(
+          "(o.order_number LIKE ? OR o.customer_name LIKE ? OR o.customer_phone LIKE ?)"
+        );
         params.push(`%${searchTerm}%`, `%${searchTerm}%`, `%${searchTerm}%`);
       }
 
-      const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(" AND ")}` : "";
+      const whereClause =
+        whereConditions.length > 0
+          ? `WHERE ${whereConditions.join(" AND ")}`
+          : "";
 
       // Get total count
       const countSql = `SELECT COUNT(*) as total FROM orders o ${whereClause}`;
@@ -213,7 +240,11 @@ class OrderModel {
         LIMIT ? OFFSET ?
       `;
 
-      const orders = await executeQuery(sql, [...params, limit, offset], "Get All Orders");
+      const orders = await executeQuery(
+        sql,
+        [...params, limit, offset],
+        "Get All Orders"
+      );
 
       return {
         orders,
@@ -235,16 +266,19 @@ class OrderModel {
   static async getUserOrders(userId, options = {}) {
     try {
       const { page = 1, limit = 10, status } = options;
-      
+
       return await this.getAllOrders({
         ...options,
         userId,
         page,
         limit,
-        status
+        status,
       });
     } catch (error) {
-      throw new DatabaseError(`Error getting user orders: ${error.message}`, error);
+      throw new DatabaseError(
+        `Error getting user orders: ${error.message}`,
+        error
+      );
     }
   }
 
@@ -260,10 +294,10 @@ class OrderModel {
       }
 
       const oldStatus = currentOrder.status;
-      
+
       // Prepare update data
       const updateData = { status: newStatus };
-      
+
       // Set timestamp fields based on status
       switch (newStatus) {
         case this.ORDER_STATUSES.CONFIRMED:
@@ -292,15 +326,18 @@ class OrderModel {
           old_status: oldStatus,
           new_status: newStatus,
           changed_by: adminId,
-          notes: notes
-        })
+          notes: notes,
+        }),
       ];
 
       await executeTransaction(queries, "Update Order Status");
-      
+
       return await this.findById(orderId);
     } catch (error) {
-      throw new DatabaseError(`Error updating order status: ${error.message}`, error);
+      throw new DatabaseError(
+        `Error updating order status: ${error.message}`,
+        error
+      );
     }
   }
 
@@ -317,11 +354,18 @@ class OrderModel {
         WHERE osh.order_id = ?
         ORDER BY osh.created_at DESC
       `;
-      
-      const result = await executeQuery(sql, [orderId], "Get Order Status History");
+
+      const result = await executeQuery(
+        sql,
+        [orderId],
+        "Get Order Status History"
+      );
       return result;
     } catch (error) {
-      throw new DatabaseError(`Error getting order status history: ${error.message}`, error);
+      throw new DatabaseError(
+        `Error getting order status history: ${error.message}`,
+        error
+      );
     }
   }
 
@@ -331,15 +375,15 @@ class OrderModel {
   static async getOrderStatistics(options = {}) {
     try {
       const { startDate, endDate } = options;
-      
+
       let dateFilter = "";
       let params = [];
-      
+
       if (startDate && endDate) {
         dateFilter = "WHERE created_at BETWEEN ? AND ?";
         params = [startDate, endDate];
       }
-      
+
       const sql = `
         SELECT 
           COUNT(*) as total_orders,
@@ -355,11 +399,14 @@ class OrderModel {
         FROM orders 
         ${dateFilter}
       `;
-      
+
       const result = await executeQuery(sql, params, "Get Order Statistics");
       return result[0];
     } catch (error) {
-      throw new DatabaseError(`Error getting order statistics: ${error.message}`, error);
+      throw new DatabaseError(
+        `Error getting order statistics: ${error.message}`,
+        error
+      );
     }
   }
 
@@ -370,38 +417,44 @@ class OrderModel {
     try {
       const today = new Date();
       const year = today.getFullYear().toString().slice(-2);
-      const month = String(today.getMonth() + 1).padStart(2, '0');
-      const day = String(today.getDate()).padStart(2, '0');
-      
+      const month = String(today.getMonth() + 1).padStart(2, "0");
+      const day = String(today.getDate()).padStart(2, "0");
+
       const datePrefix = `${year}${month}${day}`;
-      
+
       // Get today's order count
       const sql = `
         SELECT COUNT(*) as count 
         FROM orders 
         WHERE DATE(created_at) = CURDATE()
       `;
-      
+
       const result = await executeQuery(sql, [], "Get Today Order Count");
       const todayCount = result[0].count + 1;
-      
-      const orderNumber = `ORD${datePrefix}${String(todayCount).padStart(3, '0')}`;
-      
+
+      const orderNumber = `ORD${datePrefix}${String(todayCount).padStart(
+        3,
+        "0"
+      )}`;
+
       // Check if number already exists (just in case)
       const existsResult = await executeQuery(
-        "SELECT id FROM orders WHERE order_number = ?", 
-        [orderNumber], 
+        "SELECT id FROM orders WHERE order_number = ?",
+        [orderNumber],
         "Check Order Number Exists"
       );
-      
+
       if (existsResult.length > 0) {
         // If exists, add random suffix
         return `${orderNumber}${Math.floor(Math.random() * 99)}`;
       }
-      
+
       return orderNumber;
     } catch (error) {
-      throw new DatabaseError(`Error generating order number: ${error.message}`, error);
+      throw new DatabaseError(
+        `Error generating order number: ${error.message}`,
+        error
+      );
     }
   }
 
@@ -411,13 +464,16 @@ class OrderModel {
   static async cancelOrder(orderId, adminId, reason = null) {
     try {
       return await this.updateOrderStatus(
-        orderId, 
-        this.ORDER_STATUSES.CANCELLED, 
-        adminId, 
+        orderId,
+        this.ORDER_STATUSES.CANCELLED,
+        adminId,
         reason
       );
     } catch (error) {
-      throw new DatabaseError(`Error cancelling order: ${error.message}`, error);
+      throw new DatabaseError(
+        `Error cancelling order: ${error.message}`,
+        error
+      );
     }
   }
 
@@ -428,10 +484,13 @@ class OrderModel {
     try {
       return await this.getAllOrders({
         ...options,
-        status
+        status,
       });
     } catch (error) {
-      throw new DatabaseError(`Error getting orders by status: ${error.message}`, error);
+      throw new DatabaseError(
+        `Error getting orders by status: ${error.message}`,
+        error
+      );
     }
   }
 }

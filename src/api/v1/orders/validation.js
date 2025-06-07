@@ -26,6 +26,16 @@ const createOrderSchema = Joi.object({
           "number.max": "Quantity cannot exceed 1000",
           "any.required": "Quantity is required",
         }),
+        selling_price: Joi.number()
+          .positive()
+          .precision(2)
+          .optional()
+          .messages({
+            "number.base": "Selling price must be a number",
+            "number.positive": "Selling price must be positive",
+            "number.precision":
+              "Selling price can have at most 2 decimal places",
+          }),
       })
     )
     .min(1)
