@@ -9,10 +9,7 @@ const { asyncHandler } = require("../../../middleware/errorHandler");
 const {
   registerSchema,
   loginSchema,
-  verifyPhoneSchema,
-  resendCodeSchema,
-  forgotPasswordSchema,
-  resetPasswordSchema,
+  activateAccountSchema,
   changePasswordSchema,
   updateProfileSchema,
 } = require("./validation");
@@ -25,36 +22,29 @@ const {
 
 /**
  * @route POST /api/v1/auth/register
- * @desc Register a new user
- * @access Public
- */
-router.post("/register", asyncHandler(AuthController.register));
-
-/**
- * @route POST /api/v1/auth/verify-phone
- * @desc Verify phone number with verification code
+ * @desc Register a new user (NO PHONE VERIFICATION)
  * @access Public
  */
 router.post(
-  "/verify-phone",
-  validateRequest(verifyPhoneSchema),
-  asyncHandler(AuthController.verifyPhone)
+  "/register",
+  validateRequest(registerSchema),
+  asyncHandler(AuthController.register)
 );
 
 /**
- * @route POST /api/v1/auth/resend-code
- * @desc Resend verification code
+ * @route POST /api/v1/auth/activate
+ * @desc Activate account with activation code
  * @access Public
  */
 router.post(
-  "/resend-code",
-  validateRequest(resendCodeSchema),
-  asyncHandler(AuthController.resendVerificationCode)
+  "/activate",
+  validateRequest(activateAccountSchema),
+  asyncHandler(AuthController.activateAccount)
 );
 
 /**
  * @route POST /api/v1/auth/login
- * @desc User login
+ * @desc User login (only checks is_active)
  * @access Public
  */
 router.post(
@@ -63,27 +53,11 @@ router.post(
   asyncHandler(AuthController.login)
 );
 
-/**
- * @route POST /api/v1/auth/forgot-password
- * @desc Send password reset code
- * @access Public
- */
-router.post(
-  "/forgot-password",
-  validateRequest(forgotPasswordSchema),
-  asyncHandler(AuthController.forgotPassword)
-);
-
-/**
- * @route POST /api/v1/auth/reset-password
- * @desc Reset password with verification code
- * @access Public
- */
-router.post(
-  "/reset-password",
-  validateRequest(resetPasswordSchema),
-  asyncHandler(AuthController.resetPassword)
-);
+// REMOVED ROUTES:
+// - /verify-phone
+// - /resend-code
+// - /forgot-password (can be added back if needed without SMS)
+// - /reset-password
 
 // Protected routes (authentication required)
 
@@ -113,30 +87,6 @@ router.put(
 );
 
 /**
- * @route POST /api/v1/auth/profile/picture
- * @desc Upload/Update profile picture
- * @access Private
- */
-router.post(
-  "/profile/picture",
-  authenticateToken,
-  uploadMiddlewares.user,
-  handleMulterError,
-  asyncHandler(AuthController.updateProfilePicture)
-);
-
-/**
- * @route DELETE /api/v1/auth/profile/picture
- * @desc Remove profile picture
- * @access Private
- */
-router.delete(
-  "/profile/picture",
-  authenticateToken,
-  asyncHandler(AuthController.removeProfilePicture)
-);
-
-/**
  * @route POST /api/v1/auth/change-password
  * @desc Change user password
  * @access Private
@@ -150,7 +100,7 @@ router.post(
 
 /**
  * @route POST /api/v1/auth/logout
- * @desc Logout user (for completeness - token invalidation handled client-side)
+ * @desc Logout user
  * @access Private
  */
 router.post("/logout", authenticateToken, (req, res) => {

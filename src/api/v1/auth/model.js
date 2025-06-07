@@ -293,6 +293,57 @@ class UserModel {
       throw new DatabaseError(`Error getting users: ${error.message}`, error);
     }
   }
+
+  /**
+   * Activate user with activation code
+   * @param {number} userId - User ID
+   * @param {string} activationCode - Activation code used
+   * @returns {Promise<Object>} Updated user
+   */
+  static async activateUserWithCode(userId, activationCode) {
+    try {
+      const updateData = {
+        is_active: true,
+        activated_at: new Date(),
+        activation_code_used: activationCode.toUpperCase(),
+        activation_method: "activation_code",
+      };
+      return await this.updateUser(userId, updateData);
+    } catch (error) {
+      throw new DatabaseError(
+        `Error activating user with code: ${error.message}`,
+        error
+      );
+    }
+  }
+
+  /**
+   * Find user by phone number (UPDATED - removed phone verification logic)
+   * @param {string} phoneNumber - Phone number
+   * @returns {Promise<Object|null>} User object or null
+   */
+  static async findByPhoneNumber(phoneNumber) {
+    try {
+      const sql = `
+      SELECT id, phone_number, password, first_name, last_name, email, 
+             is_active, role, profile_picture, activation_code_used, activation_method,
+             created_at, updated_at, activated_at
+      FROM users 
+      WHERE phone_number = ?
+    `;
+      const result = await executeQuery(
+        sql,
+        [phoneNumber],
+        "Find User By Phone"
+      );
+      return result.length > 0 ? result[0] : null;
+    } catch (error) {
+      throw new DatabaseError(
+        `Error finding user by phone: ${error.message}`,
+        error
+      );
+    }
+  }
 }
 
 module.exports = UserModel;

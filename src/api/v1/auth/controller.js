@@ -18,17 +18,14 @@ const { FileUploadService } = require("../../../middleware/multer");
 
 class AuthController {
   /**
-   * Register a new user
+   * Register a new user (NO PHONE VERIFICATION)
    */
   static async register(req, res) {
     try {
       const { phone_number, password, first_name, last_name, email } = req.body;
 
-      // Format phone number
-      const formattedPhone = TwilioService.formatPhoneNumber(phone_number);
-
       // Check if user already exists
-      const existingUser = await UserModel.findByPhoneNumber(formattedPhone);
+      const existingUser = await UserModel.findByPhoneNumber(phone_number);
       if (existingUser) {
         throw new ConflictError(
           "An account with this phone number already exists"
@@ -46,43 +43,27 @@ class AuthController {
       // Hash password
       const hashedPassword = await hash(password);
 
-      // Create user
+      // Create user (INACTIVE by default)
       const userData = {
-        phone_number: formattedPhone,
+        phone_number,
         password: hashedPassword,
         first_name,
         last_name,
         email: email || null,
-        is_phone_verified: false,
-        is_active: false,
+        is_active: false, // User must activate with code
       };
 
       const newUser = await UserModel.createUser(userData);
 
-      // Generate and send verification code
-      const verificationCode = TwilioService.generateVerificationCode();
-      await VerificationCodeModel.createVerificationCode(
-        formattedPhone,
-        verificationCode,
-        "registration"
-      );
-
-      // Send SMS
-      await TwilioService.sendVerificationCode(
-        formattedPhone,
-        verificationCode,
-        "registration"
-      );
-
-      // Remove password from response
       delete newUser.password;
 
       res.status(201).json({
         status: true,
-        message: "Registration successful. Please verify your phone number.",
+        message:
+          "Registration successful. Please contact an administrator to get an activation code.",
         data: {
           user: newUser,
-          next_step: "verify_phone",
+          next_step: "get_activation_code",
         },
       });
     } catch (error) {
@@ -187,16 +168,14 @@ class AuthController {
   }
 
   /**
-   * User login
+   * User login (ONLY CHECK is_active)
    */
   static async login(req, res) {
     try {
       const { phone_number, password } = req.body;
 
-      const formattedPhone = TwilioService.formatPhoneNumber(phone_number);
-
       // Find user with password
-      const user = await UserModel.findByPhoneNumber(formattedPhone);
+      const user = await UserModel.findByPhoneNumber(phone_number);
       if (!user) {
         throw new AuthenticationError("Invalid phone number or password");
       }
@@ -207,15 +186,10 @@ class AuthController {
         throw new AuthenticationError("Invalid phone number or password");
       }
 
-      // Check if phone is verified
-      if (!user.is_phone_verified) {
-        throw new AuthenticationError("Please verify your phone number first");
-      }
-
-      // Check if account is active
+      // Check if account is active (REMOVED PHONE VERIFICATION CHECK)
       if (!user.is_active) {
         throw new AuthenticationError(
-          "Your account is pending admin activation"
+          "Your account is not activated. Please contact an administrator to get an activation code."
         );
       }
 
@@ -229,7 +203,7 @@ class AuthController {
 
       const token = await createToken(tokenData);
 
-      // Remove password from response and convert profile picture path to URL
+      // Remove password from response
       delete user.password;
       user.profile_picture = user.profile_picture
         ? FileUploadService.getFileUrl(req, user.profile_picture)
@@ -567,6 +541,56 @@ class AuthController {
         status: true,
         message: "Profile picture removed successfully",
         data: { user: updatedUser },
+      });
+    } catch (error) {
+      throw error;
+    }
+  }
+  /**
+   * Activate account with activation code
+   */
+  static async activateAccount(req, res) {
+    try {
+      const { phone_number, activation_code } = req.body;
+
+      // Find user
+      const user = await UserModel.findByPhoneNumber(phone_number);
+      if (!user) {
+        throw new NotFoundError("User not found");
+      }
+
+      // Check if already activated
+      if (user.is_active) {
+        throw new BusinessLogicError("Account is already activated");
+      }
+
+      // Validate activation code
+      const validation = await ActivationCodeModel.validateCode(
+        activation_code
+      );
+      if (!validation.isValid) {
+        throw new ValidationError(validation.message);
+      }
+
+      // Use the activation code
+      await ActivationCodeModel.useCode(activation_code, user.id);
+
+      // Activate user account
+      const updatedUser = await UserModel.activateUserWithCode(
+        user.id,
+        activation_code
+      );
+
+      // Remove password from response
+      delete updatedUser.password;
+
+      res.json({
+        status: true,
+        message: "Account activated successfully! You can now login.",
+        data: {
+          user: updatedUser,
+          next_step: "login",
+        },
       });
     } catch (error) {
       throw error;
